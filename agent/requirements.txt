@@ -15,7 +15,8 @@ psutil==7.1.0
 # kullanılıyor.
 httpx==0.28.1
 
-# M4'te eklenecek:
-#   systemd-python  -> journald cursor ile log okuma (logsources/linux_journald.py)
+# M4 journald okuması için ek bağımlılık YOK: loglar `journalctl --output=json` çıktısından
+# okunur, ayrıştırma standart kütüphanedeki json ile yapılır. journald zaten kurulumun ön
+# koşulu olduğu için journalctl her hedef makinede vardır.
 #
 # spool SQLite ile tutulur: sqlite3 standart kütüphanede, ek bağımlılık yok.

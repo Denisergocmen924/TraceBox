@@ -13,6 +13,7 @@ import sys
 from agent.core import loop
 from agent.core.config import ConfigError, ConfigLoader
 from agent.core.state import SingleWriterLock, StateStore
+from agent.logsources.linux_journald import JournaldSource
 
 # Çıkış kodları. systemd Restart=on-failure ile çalıştığı için sıfırdan farklı
 # her kod yeniden başlatma tetikler.
@@ -24,6 +25,9 @@ EXIT_ALREADY_RUNNING = 2
 def main() -> int:
     loader = ConfigLoader()
     store = StateStore()
+    # Tek platform seçimi buradadır: Windows desteği geldiğinde değişecek satır
+    # bu, döngü değil.
+    log_source = JournaldSource()
 
     try:
         # Döngüden önce bir kez okunur: yapılandırma hatalı ya da eksikse agent
@@ -36,7 +40,7 @@ def main() -> int:
     try:
         # Kilit tüm çalışma boyunca tutulur; süreç bittiğinde bırakılır.
         with SingleWriterLock(store.directory):
-            loop.run(loader, store)
+            loop.run(loader, store, log_source)
     except RuntimeError as exc:
         print(f"başlatılamadı: {exc}", file=sys.stderr, flush=True)
         return EXIT_ALREADY_RUNNING

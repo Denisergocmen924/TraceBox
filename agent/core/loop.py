@@ -7,8 +7,8 @@ yazar eklerdi. Tüm işler tick sayaçlarıyla sıraya girer.
 Tick sabit 1 saniyedir ve config'den okunmaz; collect/send/poll aralıkları
 birbirinden bağımsız sayaçlardır.
 
-M3 KAPSAMI: ölçümler spool'a yazılıp collector'a gönderilir. Loglar M4'te,
-komut poll'u M6'da, acil flush M7'de bu döngüye bağlanacak.
+M4 KAPSAMI: ölçümler ve sistem logları spool'a yazılıp collector'a gönderilir.
+Komut poll'u M6'da, acil flush M7'de bu döngüye bağlanacak.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from __future__ import annotations
 import signal
 import threading
 import time
+import uuid
+from collections import Counter
 from dataclasses import asdict
 
 from agent import __version__
@@ -25,8 +27,9 @@ from agent.core.config import Config, ConfigLoader
 from agent.core.inventory import Inventory
 from agent.core.metrics import MetricSample, MetricsCollector
 from agent.core.shipper import Shipper
-from agent.core.spool import RECORD_METRIC, Spool
+from agent.core.spool import RECORD_LOG, RECORD_METRIC, Spool
 from agent.core.state import State, StateStore
+from agent.logsources.base import LEVELS, LogRecord, LogSource, LogSourceError
 
 # Döngünün nabzı. Config'e AÇILMAZ: ölçüm sıklığı (insan sınırı) ile döngü ritmi
 # (sistem sabiti) ayrı kavramlardır.
@@ -118,6 +121,62 @@ def _collect(collector: MetricsCollector, spool: Spool) -> None:
     _log(f"[collect] {_format_sample(sample)}")
 
 
+def _log_payload(record: LogRecord) -> dict:
+    """LogRecord'u POST /ingest gövdesindeki log satırına çevirir (CLAUDE.md §4.2).
+
+    Çeviri okuyucuda değil BURADA yapılır: wire alanları (uuid, measured_at)
+    taşımanın işidir, okumanın değil — LogRecord her kaynakta aynı sade şekli
+    korur ([[decisions]] → "LogRecord saf kalır").
+
+    uuid her okumada yeniden üretilir. Metinden türetilen deterministik bir
+    kimlik cazip görünür (tekrar okunan log aynı id'yi alır, sunucu eler) ama
+    aynı saniyede aynı metni yazan iki AYRI logu tek kimliğe indirirdi; sunucu
+    birini tekrar sanıp atar, yani kayıp riskini tekrar riskiyle takas ederdik.
+    """
+    return {
+        "uuid": str(uuid.uuid4()),
+        "measured_at": record.timestamp,
+        "level": record.level,
+        "message": record.message,
+        "source": record.source,
+    }
+
+
+def _level_summary(records: list[LogRecord]) -> str:
+    """Okunan kayıtların seviye dağılımı — tek satırlık konsol özeti."""
+    counts = Counter(record.level for record in records)
+    return " ".join(f"{level}={counts[level]}" for level in LEVELS if counts[level])
+
+
+def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateStore) -> None:
+    """Cursor'dan beri biriken logları okuyup spool'a yazar.
+
+    Pause'da da çalışır: metrik toplama gibi, log toplama da yerel kayıttır.
+
+    SIRA ÖNEMLİDİR — önce kayıtlar spool'a, sonra cursor state'e yazılır. Ters
+    sırada, iki işlem arasında düşen bir agent o logları bir daha hiç okuyamazdı.
+    Bu sırada en kötü ihtimal birkaç logun tekrar okunmasıdır: kaybetmek yerine
+    tekrarlamak, at-least-once'ın istediği yön.
+    """
+    try:
+        records, cursor = source.read_since(state.journal_cursor)
+    except LogSourceError as error:
+        # Log kaynağı erişilemez diye metrik toplama ve gönderim durmaz;
+        # tur log'suz sürer, sorun bir sonraki turda yeniden denenir.
+        _log(f"[logs] okunamadı: {error}")
+        return
+
+    for record in records:
+        spool.add(RECORD_LOG, _log_payload(record))
+
+    if cursor != state.journal_cursor:
+        state.journal_cursor = cursor
+        store.save(state)
+
+    if records:
+        _log(f"[logs] {len(records)} kayıt ({_level_summary(records)})")
+
+
 def _poll_commands(config: Config) -> None:
     """Komut kuyruğunu yoklama adımı — M6'da GET /commands buraya bağlanır.
 
@@ -161,8 +220,13 @@ def _send_spool(
     _log(f"[send] {result.sent} kayıt gönderildi (spool: {spool.count()}).")
 
 
-def run(loader: ConfigLoader, store: StateStore) -> None:
-    """Agent'ı açılıştan kapanışa kadar çalıştırır."""
+def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
+    """Agent'ı açılıştan kapanışa kadar çalıştırır.
+
+    log_source DIŞARIDAN verilir. Hangi işletim sisteminde çalışıldığı bilgisi
+    giriş noktasının (__main__) işidir; döngü yalnızca LogSource arayüzünü
+    tanır ve journald'ı hiç import etmez (CLAUDE.md §7).
+    """
     # --- AÇILIŞ (bir kez) ---
     config = loader.load()
     state = store.load()
@@ -187,6 +251,10 @@ def run(loader: ConfigLoader, store: StateStore) -> None:
         f"poll={config.command_poll_seconds}s (tick={TICK_SECONDS}s)"
     )
     _log(f"[start] logging_enabled={state.logging_enabled}")
+    _log(
+        "[start] journal cursor: "
+        + ("kayıtlı — kaldığı yerden" if state.journal_cursor else "yok — şimdiden başlanacak")
+    )
     pending_inventory = _startup_inventory(config, state)
 
     # --- SAYAÇLAR ---
@@ -208,6 +276,7 @@ def run(loader: ConfigLoader, store: StateStore) -> None:
 
             if now >= next_collect:
                 _collect(collector, spool)
+                _collect_logs(log_source, spool, state, store)
                 next_collect = now + config.collect_interval_seconds
 
             if now >= next_poll:
