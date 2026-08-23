@@ -4,8 +4,11 @@
 # Amaç: bir davranış sözleşmesi sessizce bozulduğunda bunu insan gözüne
 # bakmadan yakalamak.
 #
-# Bu iş HİÇBİR secret kullanmaz. Testler ne Supabase'e ne Fly'a bağlanır;
-# bağlanmaları gerekseydi CI, üretim anahtarlarını taşımak zorunda kalırdı.
+# Bu iş HİÇBİR secret kullanmaz ve hiçbir servise (veritabanı, kuyruk) ihtiyaç
+# duymaz. Testler ne Supabase'e ne Fly'a bağlanır; agent testleri spool'u geçici
+# bir dizinde gerçek SQLite ile, collector'a gönderimi ise sahte bir HTTP
+# taşıyıcısıyla çalıştırır. Ağa çıkmaları gerekseydi CI, üretim anahtarlarını
+# taşımak zorunda kalırdı.
 
 name: CI
 
@@ -41,7 +44,7 @@ jobs:
 
       - name: Bağımlılıkları kur
         # Üç dosya birden: testler hem collector'ı (fastapi, httpx) hem agent'ı
-        # (psutil) import eder, pytest'in kendisi ise yalnızca geliştirme
+        # (psutil, httpx) import eder, pytest'in kendisi ise yalnızca geliştirme
         # bağımlılığıdır ve üretim image'ına girmez.
         run: |
           pip install --upgrade pip
