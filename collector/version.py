@@ -13,4 +13,4 @@ from __future__ import annotations
 # Agent'ın bildirdiği agent_version'dan bağımsız, collector'ın kendi sürümü.
 # Ayakta olan sürüm GET /verify üzerinden doğrulanır — kimliksiz uçlar (/ ve
 # /health) sürüm döndürmez.
-COLLECTOR_VERSION = "0.2.0"
+COLLECTOR_VERSION = "0.3.0"

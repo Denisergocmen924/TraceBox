@@ -20,5 +20,15 @@ uvicorn[standard]==0.34.0
 # uygulama ömrü boyunca açık kalır (supabase_client.py).
 httpx==0.28.1
 
-# M5'te eklenecek:
-#   pyjwt        -> user JWT doğrulama (auth.py)
+# Dashboard'un gönderdiği Supabase access token'ını doğrular (auth.py).
+# Token'ın imzasını, süresini ve hedef alanlarını kontrol eder; `sub` alanı
+# account_id olarak okunur.
+pyjwt==2.13.0
+
+# pyjwt'nin ES256 (eliptik eğri) imzasını doğrulayabilmesi için gereken kripto
+# motoru. Saf Python'da yapılamayan tek adım budur: bu paket kurulu değilse
+# pyjwt ES256 token'ı doğrulamayı reddeder.
+#
+# Derleyici gerektirmez: PyPI'da `cp311-abi3` etiketli hazır wheel yayınlanıyor
+# ve Python 3.12'nin (Dockerfile + CI) kullandığı sürüm budur.
+cryptography==50.0.0
