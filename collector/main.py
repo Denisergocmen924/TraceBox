@@ -6,10 +6,10 @@ Collector, cihazların buluta açılan tek yazma kapısıdır:
     [Agent] --device key/TLS--> [Collector: Fly.io] --service key--> [Supabase]
 
 Bağlı router'lar:
+  endpoints_device.py    POST /devices                               (user JWT)
   endpoints_ingest.py    POST /inventory, POST /ingest, GET /verify  (device key)
 
-Sonraki milestone'larda eklenecek:
-  M5 -> endpoints_device.py    POST /devices                         (user JWT)
+Sonraki milestone'da eklenecek:
   M6 -> endpoints_commands.py  GET  /commands                        (device key)
 """
 
@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 import supabase_client
+from endpoints_device import router as device_router
 from endpoints_ingest import router as ingest_router
 from version import COLLECTOR_VERSION
 
@@ -55,6 +56,7 @@ app = FastAPI(
     openapi_url=None,
 )
 
+app.include_router(device_router)
 app.include_router(ingest_router)
 
 

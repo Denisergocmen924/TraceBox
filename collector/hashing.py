@@ -1,18 +1,34 @@
 """
-Cihaz anahtarı hash'leme ve karşılaştırma.
+Cihaz anahtarı üretme, hash'leme ve karşılaştırma.
 
-Anahtarın düz hali hiçbir yerde saklanmaz; `devices.key_hash` yalnızca burada
-üretilen hash'i tutar.
+Anahtarın düz hali hiçbir yerde saklanmaz: `POST /devices` onu bir kez üretip
+yanıtta döndürür, veritabanına yalnızca `devices.key_hash` yazılır.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import secrets
 
 # Anahtar ön eki. Doğrulamada kullanılmaz — yalnızca kullanıcının elindeki
 # metnin ne olduğunu tanımasına yarar.
 KEY_PREFIX = "tbx_live_"
+
+# Anahtarın rastgele bölümünün BAYT uzunluğu. `token_urlsafe` bu baytları
+# base64url'e çevirdiği için üretilen metin daha uzundur (32 bayt → 43 karakter).
+KEY_ENTROPY_BYTES = 32
+
+
+def generate_device_key() -> str:
+    """Yeni bir cihaz anahtarı üretir: `tbx_live_` ön eki + rastgele son ek.
+
+    Rastgelelik `secrets` modülünden gelir; bu modül işletim sisteminin
+    kriptografik rastgelelik kaynağını kullanır. `random` modülü ise başlangıç
+    değerinden (seed) türeyen tahmin edilebilir bir dizi üretir ve bir sır
+    üretmekte kullanılamaz.
+    """
+    return f"{KEY_PREFIX}{secrets.token_urlsafe(KEY_ENTROPY_BYTES)}"
 
 
 def hash_device_key(key: str) -> str:

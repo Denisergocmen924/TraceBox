@@ -7,6 +7,7 @@ Bu modül yalnızca OKUR. Agent'ın yazdığı tek dosya state.json'dır (state.
 from __future__ import annotations
 
 import os
+import stat
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,13 @@ CONFIG_PATH_ENV_VAR = "TRACEBOX_CONFIG"
 # send_interval_seconds için alt sınır. Config'e daha küçük bir
 # değer yazılırsa sessizce yok sayılmaz: floor uygulanır ve uyarı basılır.
 MIN_SEND_INTERVAL_SECONDS = 10
+
+# config.toml düz `device_key`i barındırır. Bu bitlerden herhangi biri açıksa
+# dosyayı sahibinden BAŞKASI da okuyabiliyor demektir; makinedeki başka bir
+# yerel kullanıcı anahtarı alıp cihazı taklit edebilir.
+INSECURE_PERMISSION_BITS = (
+    stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH
+)
 
 # Config'de bulunması ZORUNLU alanlar. Eksikse agent açılışta durur; varsayılan
 # uydurmak, yanlış adrese veri göndermeye çalışan bir agent üretirdi.
@@ -70,6 +78,26 @@ def config_path() -> Path:
     """
     override = os.environ.get(CONFIG_PATH_ENV_VAR, "").strip()
     return Path(override) if override else DEFAULT_CONFIG_PATH
+
+
+def check_permissions(path: Path, mode: int, *, warn) -> bool:
+    """Config dosyasının izin bitlerini denetler; gevşekse uyarı basar.
+
+    Agent DURDURULMAZ. Çalışan bir izleme aracını izin biti yüzünden öldürmek,
+    makineyi tamamen gözsüz bırakır — yani çözdüğünden büyük bir sorun yaratır.
+    Uyarı journald'a düşer ve `systemctl status tracebox-agent` ile görülür.
+
+    Dönen değer: izinler güvenliyse True.
+    """
+    if not stat.S_IMODE(mode) & INSECURE_PERMISSION_BITS:
+        return True
+
+    warn(
+        f"{path} izinleri fazla açık ({stat.filemode(mode)}); cihaz anahtarını "
+        f"bu makinedeki başka kullanıcılar okuyabilir. Düzeltmek için: "
+        f"chmod 600 {path}"
+    )
+    return False
 
 
 def _positive_int(raw: dict, key: str, default: int) -> int:
@@ -142,7 +170,7 @@ class ConfigLoader:
         self._path = path if path is not None else config_path()
         self._warn = warn
         self._cached: Config | None = None
-        self._signature: tuple[float, int] | None = None
+        self._signature: tuple[float, int, int] | None = None
 
     @property
     def path(self) -> Path:
@@ -157,12 +185,19 @@ class ConfigLoader:
         korunur ve uyarı basılır; çalışan agent bir yazım hatası yüzünden ölmez.
         """
         try:
-            stat = self._path.stat()
-            signature = (stat.st_mtime, stat.st_size)
+            info = self._path.stat()
+            # İzin bitleri de imzanın parçası: `chmod` mtime'ı da boyutu da
+            # değiştirmez, yani izinler yalnızca burada takip edilirse sonradan
+            # gevşetilen bir dosya fark edilmeden kalırdı.
+            signature = (info.st_mtime, info.st_size, info.st_mode)
 
             # Dosya son okumadan beri değişmediyse ayrıştırmayı atla.
             if self._cached is not None and signature == self._signature:
                 return self._cached
+
+            # İzin denetimi yalnızca dosya (yeniden) okunurken çalışır; her
+            # tick'te uyarı basılsaydı log'u doldururdu.
+            check_permissions(self._path, info.st_mode, warn=self._warn)
 
             with self._path.open("rb") as handle:
                 raw = tomllib.load(handle)

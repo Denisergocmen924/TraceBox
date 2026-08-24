@@ -36,6 +36,15 @@ PREFER_IGNORE_DUPLICATES = "resolution=ignore-duplicates,return=minimal"
 # okumaya gerek yok.
 PREFER_MINIMAL = "return=minimal"
 
+# Eklenen satırın geri okunması gerektiğinde kullanılır. Cihaz kaydında `id`
+# sunucuda üretilir (`gen_random_uuid()`), yani çağıran onu ancak yanıttan
+# öğrenebilir.
+PREFER_REPRESENTATION = "return=representation"
+
+# Postgres'in "tekrar eden anahtar" hata kodu (unique kısıt ihlali). Cihaz
+# kaydında `devices (account_id, device_name)` unique indeksi bunu üretir.
+UNIQUE_VIOLATION = "23505"
+
 # Collector'ın `devices` satırında yazmasına izin verilen sütunlar.
 #
 # Bu liste bir YETKİ sınırıdır; `endpoints_ingest.InventoryIn` ise agent'ın ne
@@ -78,7 +87,17 @@ DEVICE_WRITABLE_COLUMNS = frozenset(
 
 
 class SupabaseError(RuntimeError):
-    """Supabase'e yazma/okuma başarısız oldu."""
+    """Supabase'e yazma/okuma başarısız oldu.
+
+    `code`, PostgREST yanıtındaki Postgres hata kodudur (`23505` = tekrar eden
+    anahtar gibi). Ağ hatalarında yanıt hiç oluşmadığı için `"?"` kalır.
+    Çağıran katman buna bakarak kalıcı bir çakışmayı (409) geçici bir
+    arızadan (503) ayırır.
+    """
+
+    def __init__(self, message: str, code: str = "?") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class SupabaseClient:
@@ -140,6 +159,31 @@ class SupabaseClient:
             headers={"Prefer": PREFER_MINIMAL},
         )
 
+    async def insert_device(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Yeni cihaz satırı ekler ve oluşan satırı (`id` ile birlikte) döndürür.
+
+        `insert_rows` bu iş için kullanılamaz: o metot `ignore-duplicates`
+        başlığıyla çalışır ve çakışan satırı sessizce atlar. Cihaz kaydında
+        çakışma (aynı hesapta aynı ad) sessizce geçilecek bir durum değil,
+        çağırana bildirilmesi gereken bir hatadır — bu yüzden istek o başlık
+        olmadan gönderilir ve `SupabaseError.code` üzerinden ayırt edilir.
+        """
+        response = await self._request(
+            "POST",
+            "/devices",
+            json=[row],
+            params={"select": "id"},
+            headers={"Prefer": PREFER_REPRESENTATION},
+        )
+
+        rows = response.json()
+        if not rows:
+            # PostgREST temsil istendiğinde satırı döndürür; boş gövde
+            # beklenmedik bir durumdur ve sessizce geçilmemelidir.
+            raise SupabaseError("POST /devices: oluşturulan satır okunamadı")
+
+        return rows[0]
+
     async def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> None:
         """Satırları ekler; `id` çakışanları sessizce atlar."""
         if not rows:
@@ -163,14 +207,15 @@ class SupabaseClient:
             raise SupabaseError(f"{method} {path}: {error}") from error
 
         if response.is_error:
+            code = _error_code(response)
             logger.error(
                 "Supabase %s %s → %s (kod: %s)",
                 method,
                 path,
                 response.status_code,
-                _error_code(response),
+                code,
             )
-            raise SupabaseError(f"{method} {path}: {response.status_code}")
+            raise SupabaseError(f"{method} {path}: {response.status_code}", code=code)
 
         return response
 
@@ -198,6 +243,11 @@ def _error_code(response: httpx.Response) -> str:
 
 _client: SupabaseClient | None = None
 
+# Normalize edilmiş proje adresi. PostgREST yolu `SupabaseClient` içinde
+# gömülüdür; Supabase'in DİĞER yolları (auth.py'nin çektiği JWKS belgesi) bu
+# taban adresten türetilir.
+_project_url: str | None = None
+
 
 def _normalize_url(raw: str) -> str:
     """Proje adresini sondaki `/` ve `/rest/v1` ekinden arındırır.
@@ -218,7 +268,7 @@ def init_client() -> SupabaseClient:
     Değişkenler eksikse burada hata verilir: süreç ayağa kalkmaz, Fly sağlık
     kontrolünde çakılır ve deploy bir önceki sürümde kalır.
     """
-    global _client
+    global _client, _project_url
 
     url = _normalize_url(os.environ.get(SUPABASE_URL_ENV, ""))
     service_key = os.environ.get(SUPABASE_SERVICE_KEY_ENV, "").strip()
@@ -233,17 +283,20 @@ def init_client() -> SupabaseClient:
     # Yalnızca adres ve anahtarın ön eki loglanır — anahtarın kendisi asla.
     logger.info("Supabase hedefi: %s (anahtar: %s…)", url, service_key[:11])
 
+    _project_url = url
     _client = SupabaseClient(url, service_key)
     return _client
 
 
 async def close_client() -> None:
     """Açık bağlantıları kapatır (uygulama kapanışında)."""
-    global _client
+    global _client, _project_url
 
     if _client is not None:
         await _client.aclose()
         _client = None
+
+    _project_url = None
 
 
 def get_client() -> SupabaseClient:
@@ -252,3 +305,15 @@ def get_client() -> SupabaseClient:
         raise RuntimeError("Supabase istemcisi kurulmadı.")
 
     return _client
+
+
+def get_project_url() -> str:
+    """Supabase projesinin taban adresini döndürür (REST yolu eklenmemiş hâli).
+
+    `auth.py` bunu iki yerde kullanır: JWKS belgesinin adresini kurmak ve
+    token'daki `iss` alanının beklenen değerini hesaplamak.
+    """
+    if _project_url is None:
+        raise RuntimeError("Supabase istemcisi kurulmadı.")
+
+    return _project_url
