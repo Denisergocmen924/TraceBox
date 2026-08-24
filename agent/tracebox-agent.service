@@ -1,0 +1,60 @@
+[Unit]
+Description=TraceBox Agent — metrik ve log toplayıp collector'a gönderir
+Documentation=https://github.com/denisergocmen/tracebox
+# Ağ hazır olmadan başlamak anlamsız değil ama gereksiz: agent zaten
+# gönderemediği veriyi spool'da tutar. Yine de ilk gönderimin boşa gitmemesi
+# için ağ yapılandırması bittikten sonra başlatılır.
+After=network-online.target
+Wants=network-online.target
+
+# Çökme döngüsü freni: 60 saniyelik pencerede 5'ten fazla başlatma denemesi
+# olursa systemd servisi durdurur ve `failed` durumunda bırakır. Bu iki ayar
+# systemd v230'dan beri [Service] değil [Unit] bölümüne yazılır.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+# Yetkisiz kullanıcı. install.sh bu kullanıcıyı oluşturur ve log okuyabilmesi
+# için systemd-journal grubuna ekler.
+User=tracebox
+Group=tracebox
+
+WorkingDirectory=/opt/tracebox
+# venv'in Python'ı — sistem python3'ü değil. psutil ve httpx yalnızca bu
+# yorumlayıcının site-packages'ında kurulu.
+ExecStart=/opt/tracebox/venv/bin/python -m agent
+
+# Çıktı satır satır tamponlanmasın: agent'ın uyarıları journald'a anında
+# düşsün, `systemctl status` gecikmeli göstermesin.
+Environment=PYTHONUNBUFFERED=1
+
+Restart=on-failure
+RestartSec=5
+
+# --- Yalıtım ---
+# Kök dosya sistemi salt-okunur bağlanır; yalnızca aşağıda sayılan yol yazılabilir.
+# Agent'ın yazdığı tek yer state.json + spool'un durduğu /var/lib/tracebox'tır.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tracebox
+
+# Kullanıcıların ev dizinleri görünmez, /tmp süreç için ayrı bir alandır.
+ProtectHome=yes
+PrivateTmp=yes
+
+# setuid/setgid ile yetki yükseltme yolu kapatılır: süreç başladığı yetkiden
+# fazlasını hiçbir şekilde alamaz.
+NoNewPrivileges=yes
+
+# Çekirdek ayarları ve modül yükleme kapalı — agent yalnızca okur, sistemi
+# değiştirmez.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Yalnızca IP soketleri. Agent'ın konuştuğu tek yer HTTPS üzerinden collector.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
