@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
+from agent.core.clock import utc_now_iso
+
 # Üretimdeki çalışma dizini. TRACEBOX_STATE_DIR tanımlıysa onun değeri kullanılır
 # (config.py'deki override ile aynı mantık).
 DEFAULT_STATE_DIR = Path("/var/lib/tracebox")
@@ -22,6 +24,11 @@ STATE_DIR_ENV_VAR = "TRACEBOX_STATE_DIR"
 
 STATE_FILENAME = "state.json"
 LOCK_FILENAME = "agent.lock"
+
+# `delete` komutu uygulandığında bırakılan işaret. Agent'ın yazabildiği tek
+# dizinde durur ve iki iş görür: root tarafındaki tracebox-uninstall.path onu
+# görüp kaldırmayı başlatır, agent da yeniden açılırsa buradan durur.
+DELETED_FILENAME = "deleted"
 
 
 @dataclass
@@ -133,6 +140,36 @@ class StateStore:
             os.fsync(dir_fd)
         finally:
             os.close(dir_fd)
+
+    def wipe(self) -> None:
+        """state.json'u siler — `delete` komutunun yerel temizliğinin parçası.
+
+        Dizin bırakılır: kaldırma işareti oraya yazılacak ve dizini silmek
+        zaten agent'ın yetkisi dışında (uninstall.sh'in işi).
+        """
+        self._path.unlink(missing_ok=True)
+        self._path.with_name(f"{STATE_FILENAME}.tmp").unlink(missing_ok=True)
+
+    @property
+    def deleted_marker_path(self) -> Path:
+        return self._dir / DELETED_FILENAME
+
+    def mark_deleted(self) -> Path:
+        """Kaldırma işaretini bırakır ve yolunu döndürür.
+
+        İçeriği okunmaz; önemli olan dosyanın VAR olmasıdır (systemd path
+        unit'i `PathExists` ile bakar). Yine de zaman damgası yazılır: teşhis
+        sırasında "bu makine ne zaman silindi?" sorusunun tek cevabı budur.
+        """
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self.deleted_marker_path.write_text(
+            f"{utc_now_iso()} delete komutu uygulandı\n", encoding="utf-8"
+        )
+        return self.deleted_marker_path
+
+    def is_deleted(self) -> bool:
+        """Bu cihaz `delete` komutuyla silinmiş mi."""
+        return self.deleted_marker_path.exists()
 
     def _quarantine(self, exc: Exception) -> None:
         """Okunamayan state dosyasını kenara alır."""

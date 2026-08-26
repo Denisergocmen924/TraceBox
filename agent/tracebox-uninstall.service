@@ -1,0 +1,17 @@
+[Unit]
+Description=TraceBox Agent'ı kaldırır (delete komutunun root tarafı)
+Documentation=https://github.com/denisergocmen/tracebox
+
+# Kaldırma betiği yoksa çalışacak bir şey de yok; birim `failed` yerine sessizce
+# atlanır.
+ConditionPathExists=/opt/tracebox/uninstall.sh
+
+[Service]
+Type=oneshot
+
+# User= YOK — bu birim BİLEREK root çalışır: systemctl, /etc, /opt ve kullanıcı
+# silme yetkisi ister. Kaldırmanın ayrı bir birim olması da şart: agent'ın
+# servisi içinden çalıştırılsaydı, betiğin ilk işi olan `systemctl disable --now
+# tracebox-agent.service` betiği kendi cgroup'uyla birlikte öldürür ve kaldırma
+# daha ilk adımda yarım kalırdı.
+ExecStart=/opt/tracebox/uninstall.sh --yes

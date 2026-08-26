@@ -56,6 +56,19 @@ def main(argv: list[str] | None = None) -> int:
         return _run_verify(config)
 
     store = StateStore()
+
+    # Bu cihaza `delete` komutu uygulanmışsa agent bir daha açılmaz. İşaret
+    # dosyası dururken açılsaydı, kaydı silinmiş cihaz her poll'da 401 alan bir
+    # süreç olarak sonsuza kadar dönerdi. Çıkış kodu 0: systemd
+    # Restart=on-failure ile çalışıyor, yani yeniden başlatmaz.
+    if store.is_deleted():
+        print(
+            f"Bu cihaz silindi ({store.deleted_marker_path}); agent başlatılmadı.\n"
+            "Kurulumu tamamen kaldırmak için: sudo /opt/tracebox/uninstall.sh --yes",
+            flush=True,
+        )
+        return EXIT_OK
+
     # Tek platform seçimi buradadır: Windows desteği geldiğinde değişecek satır
     # bu, döngü değil.
     log_source = JournaldSource()

@@ -12,7 +12,7 @@ turda yüklenmek ne veriyi kurtarır ne de bağlantıyı geri getirir.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -46,11 +46,19 @@ PAYLOAD_KEYS = {
 
 @dataclass(frozen=True)
 class SendResult:
-    """Bir gönderim turunun sonucu."""
+    """Bir gönderim turunun sonucu.
+
+    `acked`: 200 ile onaylanmış komut id'leri. Çağıran bunları state'ten düşer.
+    "Listeyi boşalt" değil "gönderdiklerini düş" kuralı bilerek böyle yazıldı:
+    gönderim sırasında yeni bir komut uygulanmış olsaydı, boşaltmak o ack'i
+    sessizce yutardı ([[decisions]] → "`applied_command_ids` 200 alınınca
+    küçültülür").
+    """
 
     ok: bool
     sent: int = 0
     detail: str = ""
+    acked: list[str] = field(default_factory=list)
 
 
 class Shipper:
@@ -84,6 +92,7 @@ class Shipper:
         """
         sent = 0
         acks = list(applied_command_ids)
+        confirmed: list[str] = []
 
         for _ in range(MAX_BATCHES_PER_CYCLE):
             records = self._spool.take(BATCH_ROWS)
@@ -93,17 +102,32 @@ class Shipper:
             payload = _build_payload(records, acks)
             ok, detail = self._post(config, INGEST_PATH, payload)
             if not ok:
-                return SendResult(ok=False, sent=sent, detail=detail)
+                return SendResult(ok=False, sent=sent, detail=detail, acked=confirmed)
 
             # 200 alındı: kayıtlar artık sunucuda, spool'dan düşebilirler.
             self._spool.ack([record.uuid for record in records])
             sent += len(records)
+            confirmed.extend(acks)
             acks = []
 
             if len(records) < BATCH_ROWS:
                 break
 
-        return SendResult(ok=True, sent=sent)
+        return SendResult(ok=True, sent=sent, acked=confirmed)
+
+    def send_acks(self, config, command_ids: list[str]) -> SendResult:
+        """Yalnızca ack taşıyan küçük bir `POST /ingest`.
+
+        Gövdesinde tek bir ölçüm satırı yoktur; bu bir KONTROL mesajıdır. Bu
+        yüzden gönderim kapalıyken (pause) de atılabilir: pause'un durdurduğu
+        şey telemetridir, agent'ın "komutu uyguladım" demesi değil.
+        """
+        if not command_ids:
+            return SendResult(ok=True)
+
+        payload = _build_payload([], list(command_ids))
+        ok, detail = self._post(config, INGEST_PATH, payload)
+        return SendResult(ok=ok, detail=detail, acked=list(command_ids) if ok else [])
 
     def close(self) -> None:
         self._client.close()

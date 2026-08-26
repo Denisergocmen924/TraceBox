@@ -27,4 +27,8 @@ PAKET YAPISI:
 #
 # 0.x = MVP, sözleşmeler henüz değişebilir. Wire payload'ları dondurulduğunda
 # 1.0.0'a çıkılacak.
-__version__ = "0.1.0"
+#
+# 0.2.0: agent artık uzaktan komut alıyor (pause/resume/delete). Davranış farkı
+# teşhis için önemli — dashboard'dan verilen bir pause'un neden işlemediğinin
+# ilk cevabı "cihazda hangi sürüm var?" sorusudur.
+__version__ = "0.2.0"

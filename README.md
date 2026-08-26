@@ -161,10 +161,12 @@ Her veri parçasının sahibi tam olarak tek bir bileşendir: `state.json`'ı ya
 Agent her kaydı önce disk'teki spool'a yazar ve ancak `200` cevabını aldıktan sonra siler. Bu yüzden retry beklenen bir durumdur — dolayısıyla her kayıt agent'ın ürettiği bir `UUID` taşır ve server `ON CONFLICT DO NOTHING` ile insert eder. Sonuç: aynı kayıt iki kez gönderilse bile duplicate oluşmaz, veri kaybı içinse disk'in kendisinin arızalanması gerekir.
 
 **Pause, kaydı durdurmaz.**
-Bir cihazı pause etmek *upload*'ı durdurur, *toplamayı* değil. Veri yerelde birikmeye devam eder ve resume'da sırayla akar. Pause sırasında komut yoklaması da devam eder — aksi hâlde `resume` komutu cihaza hiçbir zaman ulaşamazdı.
+Bir cihazı pause etmek *upload*'ı durdurur, *toplamayı* değil. Veri yerelde birikmeye devam eder ve resume'da sırayla akar. Pause sırasında komut yoklaması da devam eder — aksi hâlde `resume` komutu cihaza hiçbir zaman ulaşamazdı. Komut ack'i de aynı sebeple durmaz: o bir telemetri değil kontrol mesajıdır ve tek bir ölçüm satırı taşımaz. Durdurulsaydı server komutun uygulandığını hiç öğrenemez, aynı `pause`u sonsuza kadar yeniden gönderir ve dashboard cihazı hâlâ "çalışıyor" gösterirdi.
 
 **Silme işleminin bir sırası vardır.**
-Bir cihazı kaldırmak satırı hemen silmez. Önce kuyruğa bir `delete` komutu girer; agent kendini yerelde temizler (config, state, spool ve key dahil), ack'ler ve collector satırı **ancak ondan sonra** düşürür. Ters sırada yapılsaydı key anında geçersizleşir, agent kendisini uninstall etmesi gerektiğini hiç öğrenemez ve makinede sonsuza dek çalışmaya devam ederdi.
+Bir cihazı kaldırmak satırı hemen silmez. Önce kuyruğa bir `delete` komutu girer; agent komutu poll'da alır, **önce** ack'ler ve `200` cevabını gördükten sonra yerelini temizler. Collector satırı ancak o ack ile düşürür. Sıra her iki yönde de kritiktir: satır erken silinseydi key anında geçersizleşir ve agent kendisini kaldırması gerektiğini hiç öğrenemezdi; yerel temizlik ack'ten önce yapılsaydı key ile birlikte ack'i gönderme imkânı da giderdi ve satır sunucuda ölümsüz kalırdı.
+
+Temizliğin ikinci yarısı ise agent'ın yetkisi **dışındadır**: servis yetkisiz bir kullanıcıyla, `NoNewPrivileges=yes` ve `ProtectSystem=strict` altında çalışır — kendi kurulumunu kaldıramaz, systemd'ye dokunamaz. Bu yüzden agent yalnızca yazabildiği tek yere, kendi state dizinine bir işaret dosyası bırakır; root tarafında bekleyen bir systemd `path` unit'i onu görür ve `uninstall.sh`'i çalıştırır. Böylece delete uçtan uca tamamlanır ama agent'ın yetkisi bir gram artmaz.
 
 **Agent'ın sınırları vardır.**
 Disk'teki spool hem yaş (10 gün) hem boyut (200 MB) ile sınırlanmış bir ring buffer'dır; sınır aşılınca en eski kayıt düşer. İzlediği makinenin disk'ini dolduran bir monitoring aracı, açıklaması beklenen outage'a kendisi sebep olmuş olur.

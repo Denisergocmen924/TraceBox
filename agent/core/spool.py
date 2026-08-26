@@ -128,6 +128,17 @@ class Spool:
     def close(self) -> None:
         self._connection.close()
 
+    def wipe(self) -> None:
+        """Bekleyen her şeyi ve dosyanın kendisini siler (`delete` komutu).
+
+        Tablo boşaltmak yetmez: silinen satırların izi WAL dosyasında kalabilir
+        ve bu veri artık cihazda BULUNMAMALIDIR — kullanıcı cihazı sildi.
+        Bağlantı da kapatılır; açık bir tanıtıcı silinen dosyayı canlı tutar.
+        """
+        self.close()
+        for suffix in ("", "-wal", "-shm"):
+            Path(f"{self._path}{suffix}").unlink(missing_ok=True)
+
     def _configure(self) -> None:
         """Bağlantı ayarları ve şema.
 
