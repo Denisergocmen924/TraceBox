@@ -31,3 +31,30 @@ def epoch_to_utc_iso(epoch_seconds: float) -> str:
     hesaba katılmaz, değer doğrudan UTC olarak yorumlanır.
     """
     return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc).isoformat(timespec=_TIMESPEC)
+
+
+def seconds_since_iso(timestamp: str | None) -> float | None:
+    """Verilen ISO 8601 damgasından bu yana geçen saniyeyi döndürür.
+
+    İki durumda None döner ve çağıran bunu "ölçülemedi" olarak yorumlar:
+      * timestamp None ya da boş — karşılaştırılacak bir an yok,
+      * metin ISO 8601 olarak çözülemiyor — state.json elle düzenlenmiş olabilir.
+
+    Sonuç NEGATİF de çıkabilir: damga gelecekte kalmışsa (sistem saati geri
+    alınmış) fark eksi olur. Çağıran bu durumu kendi kuralına göre yorumlar;
+    burada gizlenmez, çünkü "geçen süre" sorusunun dürüst cevabı budur.
+    """
+    if not timestamp:
+        return None
+
+    try:
+        moment = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return None
+
+    # Saat dilimi taşımayan bir damga UTC kabul edilir: bu modülün ürettiği her
+    # damga zaten UTC'dir, dilimsiz bir değer ancak dışarıdan gelmiş olabilir.
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+
+    return (datetime.now(timezone.utc) - moment).total_seconds()

@@ -9,6 +9,6 @@ def test_first_sample_has_no_network_rate():
     Hız hesaplanamadığında 0.0 değil None yazılır: 0.0 "trafik yoktu"
     demek olurdu, oysa burada ölçüm hiç yapılamamıştır.
     """
-    sample = MetricsCollector().collect()
+    sample = MetricsCollector().collect().sample
     assert sample.net_sent_mb is None
     assert sample.net_recv_mb is None
