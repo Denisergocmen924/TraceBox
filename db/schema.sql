@@ -112,10 +112,10 @@ create table devices (
   -- (ör. now() - last_seen > 2 dk ise offline sayılır).
   last_seen           timestamptz,
 
-  -- Delete akışının ara durumu. Dashboard "sil" dediğinde satır
-  -- hemen silinmez: kuyruğa bir 'delete' komutu girer ve bu bayrak true olur.
-  -- Satırı, agent komutu uygulayıp ack'ledikten sonra collector siler.
-  pending_delete      boolean not null default false,
+  -- Silme akışının ara durumu ("emir verildi, cihaz henüz duymadı") burada
+  -- bir bayrakla tutulmuyor: bilgi `commands` tablosunda zaten var —
+  -- type='delete' ve status='pending' olan satır. Satırı, agent komutu
+  -- uygulayıp ack'ledikten sonra collector siler (migration 0003).
 
   created_at          timestamptz not null default now()
 );

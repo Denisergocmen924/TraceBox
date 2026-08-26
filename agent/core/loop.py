@@ -7,8 +7,9 @@ yazar eklerdi. Tüm işler tick sayaçlarıyla sıraya girer.
 Tick sabit 1 saniyedir ve config'den okunmaz; collect/send/poll aralıkları
 birbirinden bağımsız sayaçlardır.
 
-M4 KAPSAMI: ölçümler ve sistem logları spool'a yazılıp collector'a gönderilir.
-Komut poll'u M6'da, acil flush M7'de bu döngüye bağlanacak.
+M6 KAPSAMI: ölçümler ve sistem logları spool'a yazılıp collector'a gönderilir,
+komutlar (pause/resume/delete) poll ile alınıp uygulanır. Acil flush M7'de
+bu döngüye bağlanacak.
 """
 
 from __future__ import annotations
@@ -21,8 +22,10 @@ from collections import Counter
 from dataclasses import asdict
 
 from agent import __version__
+from agent.core import commands as commands_module
 from agent.core import inventory as inventory_module
 from agent.core.clock import utc_now_iso
+from agent.core.commands import CommandError, CommandPoller
 from agent.core.config import Config, ConfigLoader
 from agent.core.inventory import Inventory
 from agent.core.metrics import MetricSample, MetricsCollector
@@ -177,13 +180,76 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
         _log(f"[logs] {len(records)} kayıt ({_level_summary(records)})")
 
 
-def _poll_commands(config: Config) -> None:
-    """Komut kuyruğunu yoklama adımı — M6'da GET /commands buraya bağlanır.
+def _prune_acked(state: State, store: StateStore, acked: list[str]) -> None:
+    """Onaylanan komut id'lerini state'ten düşer.
+
+    "Listeyi boşalt" DEĞİL, "onaylananları çıkar": aradaki fark bugün görünmez
+    (tek döngü var, gönderim sırasında yeni komut uygulanamaz) ama kural
+    bugünden doğru yazılırsa ileride bozulmaz.
+    """
+    if not acked:
+        return
+
+    remaining = [value for value in state.applied_command_ids if value not in set(acked)]
+    if remaining != state.applied_command_ids:
+        state.applied_command_ids = remaining
+        store.save(state)
+
+
+def _poll_commands(
+    poller: CommandPoller,
+    config: Config,
+    state: State,
+    store: StateStore,
+    spool: Spool,
+    shipper: Shipper,
+) -> bool:
+    """Komutları sorar, uygular ve ack'ler. Cihaz silindiyse True döner.
 
     Pause'da da çalışır; durmasaydı resume ve delete komutları cihaza hiç
-    ulaşamazdı.
+    ulaşamazdı — duraklatılmış bir agent'ı geri açmanın başka yolu kalmazdı.
     """
-    _log(f"[poll] komut sorulacak (her {config.command_poll_seconds} sn) — M6")
+    try:
+        commands = poller.fetch(config)
+    except CommandError as error:
+        # Komut alınamaması toplamayı ve gönderimi durdurmaz; tur komutsuz
+        # geçer, sorun bir sonraki poll'da yeniden denenir.
+        _log(f"[poll] komutlar alınamadı: {error}")
+        return False
+
+    if not commands:
+        return False
+
+    _log(f"[poll] {len(commands)} komut: {', '.join(command.type for command in commands)}")
+
+    result = commands_module.apply_commands(
+        commands,
+        config=config,
+        state=state,
+        store=store,
+        spool=spool,
+        shipper=shipper,
+        log=_log,
+    )
+
+    if result.deleted:
+        return True
+
+    # Zaten listede olan id yeniden eklenmez; ack denemesi yine de yapılır,
+    # çünkü sunucu ack'i görene kadar aynı komutu vermeye devam eder.
+    new_ids = [value for value in result.applied_ids if value not in state.applied_command_ids]
+    if new_ids:
+        state.applied_command_ids.extend(new_ids)
+
+    if result.state_changed or new_ids:
+        store.save(state)
+
+    _prune_acked(
+        state,
+        store,
+        commands_module.ack_now(result.applied_ids, config=config, shipper=shipper, log=_log),
+    )
+    return False
 
 
 def _send_inventory(
@@ -206,6 +272,11 @@ def _send_spool(
 ) -> None:
     """Spool'u gönderir; başarılıysa last_send'i günceller."""
     result = shipper.send_pending(config, state.applied_command_ids)
+
+    # Onaylanan ack'ler gönderim yarıda kalsa bile düşer: ilk istek 200 almış
+    # olabilir, o id'ler artık sunucuda `applied`.
+    _prune_acked(state, store, result.acked)
+
     if not result.ok:
         _log(
             f"[send] gönderilemedi: {result.detail} — {spool.count()} kayıt bekliyor, "
@@ -238,6 +309,7 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
         max_size_mb=config.spool_max_size_mb,
     )
     shipper = Shipper(spool)
+    poller = CommandPoller()
 
     _log(f"[start] TraceBox agent {__version__}")
     _log(f"[start] config: {loader.path}")
@@ -266,6 +338,7 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
     next_send = now + config.send_interval_seconds
 
     # --- KALP ATIŞI ---
+    deleted = False
     try:
         while not stop.is_set():
             now = time.monotonic()
@@ -280,7 +353,11 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
                 next_collect = now + config.collect_interval_seconds
 
             if now >= next_poll:
-                _poll_commands(config)
+                if _poll_commands(poller, config, state, store, spool, shipper):
+                    # delete uygulandı: cihaz kaydı sunucudan silindi, yerel
+                    # veri temizlendi. Toplamaya devam etmenin anlamı yok.
+                    deleted = True
+                    break
                 next_poll = now + config.command_poll_seconds
 
             # Aşağısı yalnızca gönderim açıkken çalışır. Pause sırasında
@@ -303,6 +380,11 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
         # --- KAPANIŞ ---
         # Durum diskte zaten günceldir (her save anında yazıldı); burada yalnızca
         # açık dosya ve bağlantılar kapatılır.
+        poller.close()
         shipper.close()
         spool.close()
-        _log("[stop] döngü durdu.")
+
+        if deleted:
+            _log("[stop] cihaz silindi — agent duruyor, systemd yeniden başlatmayacak.")
+        else:
+            _log("[stop] döngü durdu.")

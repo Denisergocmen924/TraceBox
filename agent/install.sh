@@ -31,6 +31,16 @@ STATE_DIR="/var/lib/tracebox"
 SERVICE_USER="tracebox"
 SERVICE_NAME="tracebox-agent.service"
 UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}"
+
+# `delete` komutunun root tarafı. Agent yetkisiz çalıştığı için kendi kurulumunu
+# kaldıramaz; yapabildiği tek şey state dizinine bir işaret dosyası bırakmaktır.
+# Aşağıdaki path unit'i o dosyayı görür ve kaldırma servisini root olarak
+# çalıştırır.
+UNINSTALL_SERVICE="tracebox-uninstall.service"
+UNINSTALL_PATH_UNIT="tracebox-uninstall.path"
+UNINSTALL_SERVICE_PATH="/etc/systemd/system/${UNINSTALL_SERVICE}"
+UNINSTALL_PATH_UNIT_PATH="/etc/systemd/system/${UNINSTALL_PATH_UNIT}"
+DELETED_MARKER="${STATE_DIR}/deleted"
 TTY_DEVICE="/dev/tty"
 
 # --- Çıktı yardımcıları ----------------------------------------------------
@@ -182,7 +192,10 @@ tar -xzf "${TARBALL}" -C "${SOURCE_ROOT}" --strip-components=1 \
   || fail "Kaynak arşivi açılamadı."
 
 SOURCE_AGENT="${SOURCE_ROOT}/agent"
-for required in "__main__.py" "requirements.txt" "tracebox-agent.service"; do
+for required in \
+  "__main__.py" "requirements.txt" \
+  "tracebox-agent.service" "tracebox-uninstall.service" "tracebox-uninstall.path"
+do
   [[ -f "${SOURCE_AGENT}/${required}" ]] \
     || fail "İndirilen arşiv eksik: agent/${required} yok."
 done
@@ -221,6 +234,14 @@ for dir in "${INSTALL_DIR}" "${CONFIG_DIR}" "${STATE_DIR}"; do
     say "oluşturuldu: ${dir}"
   fi
 done
+
+# Önceki kurulum `delete` ile bitmişse geride kaldırma işareti kalmış olabilir.
+# Silinmeden path unit etkinleştirilirse, yeni kurulum daha ayağa kalkmadan
+# kendini kaldırır.
+if [[ -e "${DELETED_MARKER}" ]]; then
+  rm -f "${DELETED_MARKER}"
+  say "önceki kurulumdan kalan kaldırma işareti silindi"
+fi
 
 # Kod her kurulumda sıfırdan kopyalanır: eski sürümden kalan bir dosya
 # yenisinin yanında durmasın.
@@ -335,11 +356,20 @@ ROLLBACK_ENABLED=0
 step "6/7  systemd servisi"
 
 install -m 644 "${INSTALL_DIR}/agent/tracebox-agent.service" "${UNIT_PATH}"
+install -m 644 "${INSTALL_DIR}/agent/${UNINSTALL_SERVICE}" "${UNINSTALL_SERVICE_PATH}"
+install -m 644 "${INSTALL_DIR}/agent/${UNINSTALL_PATH_UNIT}" "${UNINSTALL_PATH_UNIT_PATH}"
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1
 systemctl restart "${SERVICE_NAME}"
 
 say "kuruldu ve başlatıldı: ${SERVICE_NAME}"
+
+# İzleyici şimdi başlar ve kaldırma işaretini beklemeye koyulur. `enable --now`
+# olmadan yalnızca bir sonraki açılışta devreye girerdi: bu makinede verilen
+# ilk `delete` komutu, makine yeniden başlatılana kadar tamamlanmazdı.
+systemctl enable --now "${UNINSTALL_PATH_UNIT}" >/dev/null 2>&1 \
+  || warn "${UNINSTALL_PATH_UNIT} etkinleştirilemedi; delete komutu geldiğinde kaldırma elle yapılmalı"
+say "kaldırma izleyicisi etkin: ${UNINSTALL_PATH_UNIT} (delete komutunun root tarafı)"
 
 # Servisin ilk saniyede düşüp düşmediğini görmek için kısa bir bekleme.
 sleep 2

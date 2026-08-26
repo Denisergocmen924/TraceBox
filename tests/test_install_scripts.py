@@ -1,7 +1,11 @@
 """
-agent/install.sh · agent/uninstall.sh · agent/tracebox-agent.service — sözleşme testleri.
+Kurulum betikleri ve systemd birimleri — sözleşme testleri.
 
-Bu üç dosya bir birim testinde ÇALIŞTIRILAMAZ: kullanıcı oluşturur, sistem
+Kapsanan dosyalar: agent/install.sh · agent/uninstall.sh ·
+agent/tracebox-agent.service · agent/tracebox-uninstall.path ·
+agent/tracebox-uninstall.service.
+
+Bu dosyalar bir birim testinde ÇALIŞTIRILAMAZ: kullanıcı oluşturur, sistem
 dizinlerine yazar, systemd'ye dokunur. Doğru çalıştıkları tek seferlik olarak
 atılabilir bir Docker konteynerinde elle doğrulandı.
 
@@ -20,12 +24,21 @@ from pathlib import Path
 
 import pytest
 
+from agent.core.state import DEFAULT_STATE_DIR, DELETED_FILENAME
+
 AGENT_DIR = Path(__file__).resolve().parent.parent / "agent"
 
 INSTALL = AGENT_DIR / "install.sh"
 UNINSTALL = AGENT_DIR / "uninstall.sh"
 UNIT = AGENT_DIR / "tracebox-agent.service"
 
+# `delete` komutunun root tarafı: agent yetkisiz çalıştığı için kendi kurulumunu
+# kaldıramaz, yalnızca state dizinine bir işaret bırakır. Path unit onu görür,
+# service unit kaldırma betiğini root olarak çalıştırır.
+PATH_UNIT = AGENT_DIR / "tracebox-uninstall.path"
+UNINSTALL_UNIT = AGENT_DIR / "tracebox-uninstall.service"
+
+UNITS = [UNIT, PATH_UNIT, UNINSTALL_UNIT]
 SCRIPTS = [INSTALL, UNINSTALL]
 
 # Yalnızca geliştirme için var olan override'lar. Üretim yolunu ezerler; kurulum
@@ -62,10 +75,20 @@ def unit() -> str:
     return read(UNIT)
 
 
+@pytest.fixture(scope="module")
+def path_unit() -> str:
+    return read(PATH_UNIT)
+
+
+@pytest.fixture(scope="module")
+def uninstall_unit() -> str:
+    return read(UNINSTALL_UNIT)
+
+
 # --- Dosyaların kendisi ----------------------------------------------------
 
 
-@pytest.mark.parametrize("path", SCRIPTS + [UNIT], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", SCRIPTS + UNITS, ids=lambda p: p.name)
 def test_file_exists(path):
     """install.sh kurulum akışının TEK giriş noktası; eksikse akış kopar."""
     assert path.is_file()
@@ -109,7 +132,7 @@ def test_script_stops_on_the_first_error(path):
 # --- Kilitli kural: geliştirme override'ları sızmamalı ---------------------
 
 
-@pytest.mark.parametrize("path", SCRIPTS + [UNIT], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", SCRIPTS + UNITS, ids=lambda p: p.name)
 @pytest.mark.parametrize("variable", DEVELOPMENT_OVERRIDES)
 def test_development_override_does_not_leak_into_production(path, variable):
     """Bu dosyadaki en kritik test.
@@ -286,3 +309,147 @@ def test_uninstall_stops_the_service_before_deleting_files(uninstall_sh):
 def test_uninstall_removes_the_service_user(uninstall_sh):
     """Geride yetim bir sistem kullanıcısı bırakılmamalı."""
     assert "userdel" in uninstall_sh
+
+
+# --- delete komutunun root tarafı ------------------------------------------
+# Agent yetkisiz çalışır: /opt, /etc ve systemd ona kapalı. Bu yüzden `delete`
+# komutunu uygularken yalnızca state dizinine bir işaret dosyası bırakır;
+# kaldırmayı root tarafında bekleyen path unit üstlenir. Zincir üç halkadan
+# oluşur (agent → işaret → path unit → uninstall.sh) ve her halka ayrı bir
+# dosyada durduğu için sessizce kopabilir.
+
+
+def test_the_watcher_looks_at_the_path_the_agent_actually_writes(path_unit):
+    """Bu dosyadaki en kritik testlerden biri.
+
+    İzlenen yol ile agent'ın yazdığı yol AYNI olmalı. Biri değişip diğeri
+    kalırsa hiçbir hata görünmez: agent işaretini bırakır, path unit başka bir
+    dosyayı bekler ve kaldırma hiç başlamaz. Cihaz sunucudan silinmiş olur ama
+    servis makinede çalışmaya devam eder.
+    """
+    expected = DEFAULT_STATE_DIR / DELETED_FILENAME
+
+    assert re.search(rf"^PathExists={re.escape(str(expected))}$", path_unit, re.MULTILINE), (
+        f"path unit {expected} yolunu izlemiyor"
+    )
+
+
+def test_the_watcher_catches_a_marker_that_is_already_there(path_unit):
+    """`PathExists`, `PathChanged` değil.
+
+    PathChanged yalnızca dosya OLUŞTUĞU anda tetiklenir. Agent işaretini
+    bıraktıktan hemen sonra makine kapanırsa (ya da o an path unit çalışmıyorsa)
+    tetikleme kaçar ve kaldırma bir daha hiç yapılmaz. PathExists zaten duran
+    dosyayı da görür: kaldırma en geç bir sonraki açılışta tamamlanır.
+    """
+    assert re.search(r"^PathExists=", path_unit, re.MULTILINE)
+    assert not re.search(r"^PathChanged=", path_unit, re.MULTILINE)
+
+
+def test_the_watcher_triggers_the_uninstall_unit(path_unit):
+    """Zincirin ikinci halkası: path unit hangi birimi çalıştıracak?"""
+    assert re.search(rf"^Unit={re.escape(UNINSTALL_UNIT.name)}$", path_unit, re.MULTILINE)
+
+
+def test_the_watcher_starts_at_boot(path_unit):
+    """[Install] bölümü olmayan bir path unit `enable` EDİLEMEZ.
+
+    Edilemezse yeniden başlatmadan sonra izleyici hiç ayağa kalkmaz ve o
+    aradaki bir `delete` komutu sonsuza kadar yarım kalır.
+    """
+    assert re.search(r"^WantedBy=multi-user\.target$", path_unit, re.MULTILINE)
+
+
+def test_the_uninstall_unit_runs_the_script_without_asking(uninstall_unit):
+    """Kaldırma servisi soru soramaz: karşısında terminal yok.
+
+    `--yes` düşerse betik onay bekler, oneshot birim yanıtsız takılır ve
+    kaldırma tamamlanmaz.
+    """
+    exec_start = re.search(r"^ExecStart=(.+)$", uninstall_unit, re.MULTILINE)
+
+    assert exec_start, "ExecStart yok"
+    assert exec_start.group(1) == "/opt/tracebox/uninstall.sh --yes"
+
+
+def test_the_uninstall_unit_runs_as_root(uninstall_unit):
+    """Bu birim BİLEREK root çalışır — istisna burada, agent'ta değil.
+
+    `User=tracebox` eklenirse kaldırma sessizce başarısız olur: systemctl,
+    /etc ve /opt o kullanıcıya kapalıdır. Testin işi, istisnanın yalnızca bu
+    dosyada kaldığını ve agent'ın kendi biriminin yetkisiz kalmaya devam
+    ettiğini (test_service_does_not_run_as_root) ayrı ayrı tutmaktır.
+    """
+    assert not re.search(r"^User=", uninstall_unit, re.MULTILINE)
+
+
+def test_the_uninstall_unit_is_separate_from_the_agent_unit(unit):
+    """Kaldırma agent'ın kendi biriminden çalıştırılamaz.
+
+    Çalıştırılsaydı betiğin ilk işi olan `systemctl disable --now
+    tracebox-agent.service` betiği kendi cgroup'uyla birlikte öldürür ve
+    kaldırma daha ilk adımda yarıda kalırdı.
+    """
+    assert "uninstall.sh" not in code(unit)
+
+
+def test_install_puts_both_uninstall_units_in_place(install_sh):
+    """Kurulum bu iki dosyayı /etc/systemd/system'e koymazsa zincir hiç kurulmaz."""
+    body = code(install_sh)
+
+    for variable, unit_file in (
+        ("UNINSTALL_SERVICE", UNINSTALL_UNIT),
+        ("UNINSTALL_PATH_UNIT", PATH_UNIT),
+    ):
+        # Betiğin adlandırdığı dosya, repodaki dosyanın kendisi olmalı: birim
+        # yeniden adlandırılıp betik güncellenmezse kurulum var olmayan bir
+        # dosyayı kopyalamaya çalışır.
+        assert f'{variable}="{unit_file.name}"' in body, f"{unit_file.name} adı betikte yok"
+        assert f'{variable}_PATH="/etc/systemd/system/${{{variable}}}"' in body
+        assert re.search(
+            rf'install -m 644 "\$\{{INSTALL_DIR\}}/agent/\$\{{{variable}\}}" '
+            rf'"\$\{{{variable}_PATH\}}"',
+            body,
+        ), f"{unit_file.name} kurulmuyor"
+
+    assert 'enable --now "${UNINSTALL_PATH_UNIT}"' in body, "path unit etkinleştirilmiyor"
+
+
+def test_install_clears_a_leftover_marker_before_starting_the_watcher(install_sh):
+    """İkinci en kritik test.
+
+    Önceki kurulum `delete` ile bittiyse geride kaldırma işareti kalmış olabilir.
+    İzleyici o dosya dururken etkinleştirilirse yeni kurulum, daha ilk saniyede
+    kendini kaldırır — kullanıcının anahtarı da beraberinde gider.
+    """
+    body = code(install_sh)
+    remove_index = body.index('rm -f "${DELETED_MARKER}"')
+    enable_index = body.index('enable --now "${UNINSTALL_PATH_UNIT}"')
+
+    assert remove_index < enable_index, "izleyici, eski işaret silinmeden başlatılıyor"
+
+
+def test_uninstall_removes_both_uninstall_units(uninstall_sh):
+    """Geride yetim unit dosyası kalmamalı; sonraki kurulum onları yeniler."""
+    body = code(uninstall_sh)
+
+    assert "${UNINSTALL_PATH_UNIT_PATH}" in body
+    assert "${UNINSTALL_SERVICE_PATH}" in body
+
+
+def test_uninstall_does_not_stop_the_unit_that_is_running_it(uninstall_sh):
+    """En sinsi hata burada olurdu.
+
+    Betik çoğu zaman tracebox-uninstall.service tarafından çalıştırılır. O birimi
+    durdurmak (`stop` ya da `disable --now`) kendi süreç ağacını öldürmek
+    demektir: kaldırma tam ortasında kesilir, makinede yarım silinmiş bir
+    kurulum kalır. İzleyici (path unit) durdurulabilir — betiği o çalıştırmıyor.
+    """
+    body = code(uninstall_sh)
+
+    assert not re.search(r"systemctl (stop|disable --now) .*UNINSTALL_SERVICE", body), (
+        "betik kendini çalıştıran birimi durduruyor"
+    )
+    assert re.search(r'systemctl disable --now "\$\{UNINSTALL_PATH_UNIT\}"', body), (
+        "izleyici kapatılmıyor"
+    )

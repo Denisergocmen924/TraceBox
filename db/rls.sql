@@ -89,8 +89,8 @@ create policy del_devices on public.devices
 -- -----------------------------------------------------------------------------
 -- SORUN: yukarıdaki upd_devices politikası SATIR düzeyinde çalışır; hangi
 -- SÜTUNLARIN yazılabileceğini söylemez. Tek başına bırakılırsa kullanıcı kendi
--- cihaz satırının key_hash / last_seen / logging_enabled / pending_delete
--- alanlarını da yazabilir. Bu:
+-- cihaz satırının key_hash / last_seen / logging_enabled alanlarını da
+-- yazabilir. Bu:
 --   * "single writer" ilkesini bozar (bu alanların yazarı collector'dır),
 --   * last_seen'i elle ileri atarak offline tespitini yanıltmayı,
 --   * key_hash'i değiştirip kendi agent'ını kilitlemeyi mümkün kılar.

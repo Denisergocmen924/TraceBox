@@ -1,0 +1,20 @@
+[Unit]
+Description=TraceBox — silinen cihazda kaldırmayı tetikler
+Documentation=https://github.com/denisergocmen/tracebox
+
+[Path]
+# Agent kendi kurulumunu KALDIRAMAZ: yetkisiz `tracebox` kullanıcısıyla,
+# NoNewPrivileges=yes ve ProtectSystem=strict altında çalışır — yazabildiği tek
+# yer /var/lib/tracebox'tır. `delete` komutunu uygulayınca oraya bu işaret
+# dosyasını bırakır; root tarafında bekleyen bu birim onu görüp kaldırmayı
+# başlatır. Böylece delete tamamlanır ama agent'ın yetkisi bir gram artmaz.
+#
+# PathExists (PathChanged değil): dosya kaldırma sırasında ya da makine
+# kapalıyken oluşmuş olabilir. PathExists zaten var olan dosyayı da yakalar,
+# yani agent silme işaretini bırakıp makine hemen kapansa bile kaldırma bir
+# sonraki açılışta yapılır.
+PathExists=/var/lib/tracebox/deleted
+Unit=tracebox-uninstall.service
+
+[Install]
+WantedBy=multi-user.target

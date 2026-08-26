@@ -232,3 +232,95 @@ def test_inventory_is_confirmed_only_by_a_200(spool):
 
     assert shipper.send_inventory(CONFIG, {"os_name": "Ubuntu"}).ok is False
     assert shipper.send_inventory(CONFIG, {"os_name": "Ubuntu"}).ok is True
+
+
+# --- Komut ack'leri --------------------------------------------------------
+
+
+def test_confirmed_acks_are_reported_back(spool):
+    """200 alınan ack'ler sonuçta bildirilir; çağıran onları state'ten düşer.
+
+    Bildirilmezlerse id'ler state'te kalır ve her gönderimde tekrar tekrar
+    gönderilir — sunucu onları çoktan `applied` yapmışken.
+    """
+    fill(spool, 1)
+    shipper = make_shipper(spool, FakeCollector(200))
+
+    assert shipper.send_pending(CONFIG, ["komut-1"]).acked == ["komut-1"]
+
+
+def test_acks_are_not_reported_when_the_request_fails(spool):
+    """İstek başarısızsa ack onaylanmış sayılmaz.
+
+    Sayılsaydı id state'ten düşer, sunucuya hiç ulaşmaz ve komut sonsuza kadar
+    `pending` kalırdı: her poll'da yeniden gelir, agent'ın uyguladığı hiç
+    bilinmezdi.
+    """
+    fill(spool, 1)
+    shipper = make_shipper(spool, FakeCollector(500))
+
+    result = shipper.send_pending(CONFIG, ["komut-1"])
+
+    assert result.ok is False
+    assert result.acked == []
+
+
+def test_acks_confirmed_by_the_first_batch_survive_a_later_failure(spool, monkeypatch):
+    """Tur yarıda kalsa bile ilk isteğin ack'i onaylanmıştır.
+
+    Ack'ler yalnızca ilk isteğe biner; o istek 200 aldıysa komutlar sunucuda
+    `applied` olmuştur. Sonraki batch'in hatası bu gerçeği geri almaz.
+    """
+    monkeypatch.setattr("agent.core.shipper.BATCH_ROWS", 2)
+    fill(spool, 5)
+    shipper = make_shipper(spool, FakeCollector(200, 500))
+
+    result = shipper.send_pending(CONFIG, ["komut-1"])
+
+    assert result.ok is False
+    assert result.acked == ["komut-1"]
+
+
+def test_ack_only_request_carries_no_measurements(spool):
+    """send_acks bir KONTROL mesajıdır: gövdesinde tek ölçüm satırı yoktur.
+
+    Spool dolu olsa bile ona dokunulmaz — bu istek pause sırasında da atılır ve
+    telemetri taşısaydı pause'un anlamını çiğnerdi.
+    """
+    fill(spool, 3)
+    collector = FakeCollector(200)
+    shipper = make_shipper(spool, collector)
+
+    result = shipper.send_acks(CONFIG, ["komut-1", "komut-2"])
+
+    assert result.ok is True
+    assert result.acked == ["komut-1", "komut-2"]
+    assert collector.bodies == [
+        {
+            "metrics": [],
+            "logs": [],
+            "crash_snapshots": [],
+            "applied_command_ids": ["komut-1", "komut-2"],
+        }
+    ]
+    # Spool'a dokunulmadı: kayıtlar normal gönderimi bekliyor.
+    assert spool.count() == 3
+
+
+def test_ack_only_request_is_skipped_when_there_is_nothing_to_ack(spool):
+    """Ack yoksa istek de yok — boş gövdenin karşılığı yok."""
+    collector = FakeCollector()
+    shipper = make_shipper(spool, collector)
+
+    assert shipper.send_acks(CONFIG, []).ok is True
+    assert collector.requests == []
+
+
+def test_failed_ack_only_request_confirms_nothing(spool):
+    """Ack isteği başarısızsa hiçbir id onaylanmaz; sonraki gönderime kalırlar."""
+    shipper = make_shipper(spool, FakeCollector(500))
+
+    result = shipper.send_acks(CONFIG, ["komut-1"])
+
+    assert result.ok is False
+    assert result.acked == []

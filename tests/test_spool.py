@@ -16,6 +16,8 @@ dosya boyutuna çevrilirse WAL modunda veri dosyada görünmez, sınır hiç aş
 sayılmaz ve halka tampon (ring buffer) sessizce çalışmayı bırakır.
 """
 
+import sqlite3
+
 import pytest
 
 from agent.core import spool as spool_module
@@ -146,3 +148,47 @@ def test_size_limit_drops_the_oldest_records(tmp_path):
         assert spool.size_bytes() <= 1 * 1024 * 1024
     finally:
         spool.close()
+
+
+def test_wipe_leaves_no_trace_of_the_data(tmp_path):
+    """`delete` komutunun yerel temizliği: dosya da yan dosyaları da gitmeli.
+
+    Tabloyu boşaltmak yetmez ve dosyayı silmek de tek başına yetmez: WAL
+    modunda yazılan satırlar `-wal` yan dosyasında durur. Temiz bir kapanışta
+    SQLite onu kendi toplar — ama son bağlantı kapanmadıysa (ikinci bir tanıtıcı,
+    çökmüş bir süreç) yan dosya olduğu gibi kalır ve içinde ölçümler vardır.
+    Kullanıcı cihazı sildiğinde o veri makinede BULUNMAMALIDIR; bu yüzden silme
+    SQLite'ın nezaketine bırakılmaz.
+
+    Test o durumu bilerek kurar: ikinci bir bağlantı açık tutulur, böylece
+    kapanış WAL'ı temizleyemez ve geriye yalnızca `wipe`ın kendi silmesi kalır.
+    """
+    spool = Spool(tmp_path, max_age_days=10, max_size_mb=200)
+    for index in range(5):
+        spool.add(RECORD_METRIC, make_record(f"kayit-{index}", message=PAYLOAD_FILLER))
+
+    sidecar = sqlite3.connect(spool.path)
+    try:
+        # Bağlantı gerçekten AÇILMALI: sqlite3.connect tembeldir, dosyaya ilk
+        # sorguda dokunur. Sorgu atılmazsa spool'unki son bağlantı sayılır,
+        # kapanışta WAL'ı toplar ve testin kurduğu durum hiç oluşmaz.
+        sidecar.execute("select count(*) from pending").fetchone()
+
+        wal = spool.path.with_name(spool.path.name + "-wal")
+        assert wal.exists(), "WAL yan dosyası hiç oluşmamış — test kurgusu geçersiz"
+
+        spool.wipe()
+
+        for suffix in ("", "-wal", "-shm"):
+            leftover = spool.path.with_name(spool.path.name + suffix)
+            assert not leftover.exists(), f"geride kaldı: {leftover}"
+
+        # Silmeden sonra spool ÖLÜDÜR. Bağlantı açık bırakılsaydı sıradaki
+        # yazma dosyayı yeniden yaratır ve silinmiş cihazda yeni ölçümler
+        # birikmeye başlardı — hem de kimse fark etmeden.
+        with pytest.raises(sqlite3.ProgrammingError):
+            spool.add(RECORD_METRIC, make_record("silme-sonrasi"))
+
+        assert not spool.path.exists()
+    finally:
+        sidecar.close()
