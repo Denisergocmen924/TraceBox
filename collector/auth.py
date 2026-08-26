@@ -72,7 +72,6 @@ class DeviceIdentity:
     id: str
     account_id: str
     device_name: str
-    pending_delete: bool
 
 
 @dataclass(frozen=True)
@@ -234,7 +233,6 @@ async def require_device(
         id=row["id"],
         account_id=row["account_id"],
         device_name=row["device_name"],
-        pending_delete=row["pending_delete"],
     )
 
 

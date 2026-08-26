@@ -58,9 +58,9 @@ UNIQUE_VIOLATION = "23505"
 #                     hesabın dashboard'una veri enjekte edebilirdi.
 #   key_hash        — kimlik kanıtının kendisi; cihaz kendi anahtarını seçemez.
 #   device_name     — dashboard'un alanı (db/rls.sql: grant update (device_name)).
-#   logging_enabled — pause/resume durumu; sunucu kopyasını kimin yazacağı M6'da
-#   pending_delete    karara bağlanacak. O karar verilene kadar collector bu
-#                     sütunlara dokunmaz.
+#   logging_enabled — pause/resume durumunun sunucu kopyası. M6'dan beri
+#                     yazılıyor ama bu yoldan değil: agent komutu ack'leyince
+#                     ack işleyicisi güncelliyor, envanter/ingest gövdesi değil.
 #
 # Buraya sütun eklemek bilinçli bir güvenlik kararıdır.
 DEVICE_WRITABLE_COLUMNS = frozenset(
@@ -124,7 +124,7 @@ class SupabaseClient:
             "/devices",
             params={
                 "key_hash": f"eq.{key_hash}",
-                "select": "id,account_id,device_name,key_hash,logging_enabled,pending_delete",
+                "select": "id,account_id,device_name,key_hash,logging_enabled",
                 "limit": "1",
             },
         )
