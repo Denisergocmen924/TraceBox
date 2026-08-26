@@ -8,9 +8,7 @@ Collector, cihazların buluta açılan tek yazma kapısıdır:
 Bağlı router'lar:
   endpoints_device.py    POST /devices                               (user JWT)
   endpoints_ingest.py    POST /inventory, POST /ingest, GET /verify  (device key)
-
-Sonraki milestone'da eklenecek:
-  M6 -> endpoints_commands.py  GET  /commands                        (device key)
+  endpoints_commands.py  GET /commands                              (device key)
 """
 
 from __future__ import annotations
@@ -21,6 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 import supabase_client
+from endpoints_commands import router as commands_router
 from endpoints_device import router as device_router
 from endpoints_ingest import router as ingest_router
 from version import COLLECTOR_VERSION
@@ -58,6 +57,7 @@ app = FastAPI(
 
 app.include_router(device_router)
 app.include_router(ingest_router)
+app.include_router(commands_router)
 
 
 @app.get("/")

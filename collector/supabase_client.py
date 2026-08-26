@@ -58,13 +58,17 @@ UNIQUE_VIOLATION = "23505"
 #                     hesabın dashboard'una veri enjekte edebilirdi.
 #   key_hash        — kimlik kanıtının kendisi; cihaz kendi anahtarını seçemez.
 #   device_name     — dashboard'un alanı (db/rls.sql: grant update (device_name)).
-#   logging_enabled — pause/resume durumunun sunucu kopyası. M6'dan beri
-#                     yazılıyor ama bu yoldan değil: agent komutu ack'leyince
-#                     ack işleyicisi güncelliyor, envanter/ingest gövdesi değil.
+#
+# logging_enabled M6'da listeye EKLENDİ (bkz. md/memory/decisions.md → "Komutlar
+# (M6)"): pause/resume durumunun sunucu kopyasını, agent komutu ack'leyince
+# collector yazar. Değer istek gövdesinden gelmez — `commands` satırındaki
+# `type` alanından türetilir; agent'ın gönderdiği tek şey komut id'sidir.
 #
 # Buraya sütun eklemek bilinçli bir güvenlik kararıdır.
 DEVICE_WRITABLE_COLUMNS = frozenset(
     {
+        # komut ack'inin türettiği durum
+        "logging_enabled",
         # agent'ın envanterden bildirdikleri (InventoryIn ile aynı 14 alan)
         "cpu_model",
         "cpu_cores_physical",
@@ -183,6 +187,77 @@ class SupabaseClient:
             raise SupabaseError("POST /devices: oluşturulan satır okunamadı")
 
         return rows[0]
+
+    async def delete_device(self, device_id: str) -> None:
+        """Cihaz satırını siler.
+
+        Yalnızca `delete` komutunun ack'i bu yola girer. Satırla birlikte
+        metrics / logs / crash_snapshots / commands satırları da gider — şemadaki
+        foreign key'ler `on delete cascade` taşır.
+        """
+        await self._request(
+            "DELETE",
+            "/devices",
+            params={"id": f"eq.{device_id}"},
+            headers={"Prefer": PREFER_MINIMAL},
+        )
+
+    async def list_pending_commands(self, device_id: str) -> list[dict[str, Any]]:
+        """Cihazın bekleyen komutlarını eskiden yeniye döndürür.
+
+        Filtre `device_id` ile sınırlıdır: service key RLS'i bypass ettiği için
+        satır sahipliğini bu sorgu kurar. Sıra `created_at` artan — agent birden
+        fazla komutu tek turda alırsa verildikleri sırayla uygular.
+        """
+        response = await self._request(
+            "GET",
+            "/commands",
+            params={
+                "device_id": f"eq.{device_id}",
+                "status": "eq.pending",
+                "select": "id,type",
+                "order": "created_at.asc",
+            },
+        )
+        return response.json()
+
+    async def mark_commands_applied(
+        self, device_id: str, command_ids: list[str], applied_at: str
+    ) -> list[dict[str, Any]]:
+        """Verilen komutları `applied` yapar ve GERÇEKTEN güncellenen satırları döndürür.
+
+        İki filtre birden uygulanır: `id` listede olacak VE satır bu cihaza ait
+        olacak. İkincisi olmasaydı bir cihaz, başka bir cihazın komutunu
+        ack'leyip onu uygulanmış gösterebilirdi — kurbanın agent'ı komutu hiç
+        görmezdi (agent yalnızca `pending` olanları çeker).
+
+        `status` filtresi BİLEREK yok: zaten `applied` olan bir komut yeniden
+        yazılır. Ack tekrarı normaldir (200 yolda kaybolursa agent aynı id'yi
+        bir daha yollar) ve dönen satırlar delete akışının tetikleyicisidir —
+        `applied` olanları eleseydik, ilk turda satır silme adımı yarım kalan
+        bir delete bir daha asla tamamlanamazdı. Bedeli: tekrar eden ack
+        `applied_at`'i tazeler.
+
+        Dönen satırlar `type` alanını taşır; çağıran hangi durumun uygulanacağını
+        (pause/resume/delete) buradan öğrenir — agent'ın gövdesinden değil.
+        """
+        if not command_ids:
+            return []
+
+        id_list = ",".join(command_ids)
+        response = await self._request(
+            "PATCH",
+            "/commands",
+            params={
+                "id": f"in.({id_list})",
+                "device_id": f"eq.{device_id}",
+                "select": "id,type,created_at",
+                "order": "created_at.asc",
+            },
+            json={"status": "applied", "applied_at": applied_at},
+            headers={"Prefer": PREFER_REPRESENTATION},
+        )
+        return response.json()
 
     async def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> None:
         """Satırları ekler; `id` çakışanları sessizce atlar."""

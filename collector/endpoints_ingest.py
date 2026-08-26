@@ -7,16 +7,17 @@ Cihazdan gelen yazma uçları: POST /inventory, POST /ingest, GET /verify.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from auth import AuthenticatedDevice, DeviceIdentity
+from db_access import call_or_503, server_now
+from endpoints_commands import process_acks
 from version import COLLECTOR_VERSION
-from supabase_client import SupabaseError, get_client
+from supabase_client import get_client
 
 router = APIRouter()
 
@@ -117,9 +118,12 @@ class IngestIn(_Payload):
     crash_snapshots: Annotated[
         list[CrashSnapshotIn], Field(max_length=MAX_ROWS_PER_TABLE)
     ] = Field(default_factory=list)
-    # M6'da işlenecek: ack edilen komutlar 'applied' yapılacak, delete komutu
-    # cihaz satırının silinmesini tetikleyecek.
-    applied_command_ids: list[UUID] = Field(default_factory=list)
+    # Uygulanmış komutların id'leri (ack). Ayrı bir uç yerine bu gövdeye
+    # binerler: agent zaten düzenli olarak buraya istek atıyor, ack için ikinci
+    # bir tur açmak boşuna trafik olurdu.
+    applied_command_ids: Annotated[
+        list[UUID], Field(max_length=MAX_ROWS_PER_TABLE)
+    ] = Field(default_factory=list)
 
 
 @router.post("/inventory")
@@ -129,9 +133,9 @@ async def post_inventory(payload: InventoryIn, device: AuthenticatedDevice) -> d
     Envanter zaman serisi değildir: her gönderim bir öncekinin üzerine yazar.
     """
     fields = payload.model_dump(mode="json")
-    fields["last_seen"] = _server_now()
+    fields["last_seen"] = server_now()
 
-    await _write(lambda: get_client().update_device(device.id, fields))
+    await call_or_503(lambda: get_client().update_device(device.id, fields))
     return {"status": "ok", "device_name": device.device_name}
 
 
@@ -151,9 +155,21 @@ async def post_ingest(payload: IngestIn, device: AuthenticatedDevice) -> dict:
 
     for table, items in tables:
         rows = [_row(item, device) for item in items]
-        await _write(lambda table=table, rows=rows: client.insert_rows(table, rows))
+        await call_or_503(lambda table=table, rows=rows: client.insert_rows(table, rows))
 
-    await _write(lambda: client.update_device(device.id, {"last_seen": _server_now()}))
+    # Ack, veri yazıldıktan SONRA işlenir: `delete` ack'i cihaz satırını siler ve
+    # o satıra bağlı her şey CASCADE ile gider. Ters sırada, aynı gövdede gelen
+    # ölçümler silinmiş bir cihaza yazılmaya çalışılırdı (foreign key hatası).
+    ack = await process_acks(client, device, payload.applied_command_ids)
+
+    if not ack.device_deleted:
+        fields: dict[str, Any] = {"last_seen": server_now()}
+        if ack.logging_enabled is not None:
+            # pause/resume'un sunucu kopyası. Doğruluk kaynağı agent'ın
+            # state.json'ı; bu sütun dashboard rozeti için tutulur ve bu yüzden
+            # komut VERİLDİĞİNDE değil, agent UYGULADIĞINI bildirdiğinde yazılır.
+            fields["logging_enabled"] = ack.logging_enabled
+        await call_or_503(lambda: client.update_device(device.id, fields))
 
     return {
         "status": "ok",
@@ -190,29 +206,5 @@ def _row(item: BaseModel, device: DeviceIdentity) -> dict[str, Any]:
     row[ID_COLUMN] = row.pop(UUID_FIELD)
     row["device_id"] = device.id
     row["account_id"] = device.account_id
-    row["received_at"] = _server_now()
+    row["received_at"] = server_now()
     return row
-
-
-def _server_now() -> str:
-    """`last_seen` için sunucu saati.
-
-    Agent'ın damgası kullanılmaz: saati kaymış bir cihaz aksi halde offline
-    tespitini yanıltırdı.
-    """
-    return datetime.now(timezone.utc).isoformat()
-
-
-async def _write(operation) -> None:
-    """Supabase çağrısını çalıştırır; hatayı 503'e çevirir.
-
-    503, agent'a "veriyi tut, sonra tekrar dene" demektir; spool kaydı ancak 200
-    sonrası silinir.
-    """
-    try:
-        await operation()
-    except SupabaseError as error:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Kayıt şu an yazılamıyor.",
-        ) from error
