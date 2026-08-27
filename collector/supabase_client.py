@@ -59,10 +59,10 @@ UNIQUE_VIOLATION = "23505"
 #   key_hash        — kimlik kanıtının kendisi; cihaz kendi anahtarını seçemez.
 #   device_name     — dashboard'un alanı (db/rls.sql: grant update (device_name)).
 #
-# logging_enabled M6'da listeye EKLENDİ (bkz. md/memory/decisions.md → "Komutlar
-# (M6)"): pause/resume durumunun sunucu kopyasını, agent komutu ack'leyince
-# collector yazar. Değer istek gövdesinden gelmez — `commands` satırındaki
-# `type` alanından türetilir; agent'ın gönderdiği tek şey komut id'sidir.
+# logging_enabled M6'da listeye EKLENDİ: pause/resume durumunun sunucu
+# kopyasını, agent komutu ack'leyince collector yazar. Değer istek gövdesinden
+# gelmez — `commands` satırındaki `type` alanından türetilir; agent'ın
+# gönderdiği tek şey komut id'sidir.
 #
 # Buraya sütun eklemek bilinçli bir güvenlik kararıdır.
 DEVICE_WRITABLE_COLUMNS = frozenset(
