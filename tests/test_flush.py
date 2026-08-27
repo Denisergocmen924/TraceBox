@@ -26,7 +26,7 @@ import pytest
 
 from agent.core import flush, loop
 from agent.core.clock import utc_now_iso
-from agent.core.config import Config
+from agent.core.config import ADDON_CRASH_PROCESSES, Config
 from agent.core.metrics import MetricReading, MetricSample
 from agent.core.shipper import SendResult
 from agent.core.spool import RECORD_CRASH, Spool
@@ -277,7 +277,7 @@ def test_snapshot_is_written_even_when_the_addon_is_off():
 def test_snapshot_carries_processes_when_the_addon_is_on(fake_processes):
     """Eklenti açıkken en çok kaynak yiyen süreçler listelenir."""
     fake_processes([FakeProcess(f"p{index}", cpu=float(index), ram_mb=index) for index in range(9)])
-    config = replace(CONFIG, enabled_addons=(flush.CRASH_PROCESSES_ADDON,))
+    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
     snapshot = flush.build_crash_snapshot(flush.REASON_CPU, config)
 
@@ -298,7 +298,7 @@ def test_ram_triggered_snapshot_ranks_by_memory(fake_processes):
             FakeProcess("ram-yiyen", cpu=0.1, ram_mb=8000),
         ]
     )
-    config = replace(CONFIG, enabled_addons=(flush.CRASH_PROCESSES_ADDON,))
+    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
     by_ram = flush.build_crash_snapshot(flush.REASON_RAM, config)
     by_cpu = flush.build_crash_snapshot(flush.REASON_CPU, config)
@@ -319,7 +319,7 @@ def test_processes_that_vanish_mid_read_are_skipped(fake_processes):
             FakeProcess("sağlam", cpu=5.0, ram_mb=10),
         ]
     )
-    config = replace(CONFIG, enabled_addons=(flush.CRASH_PROCESSES_ADDON,))
+    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
     snapshot = flush.build_crash_snapshot(flush.REASON_CPU, config)
 
@@ -333,7 +333,7 @@ def test_psutil_failure_leaves_the_snapshot_without_processes(monkeypatch):
     engellememeli.
     """
     monkeypatch.setattr(flush, "_top_processes", _raise_psutil_error)
-    config = replace(CONFIG, enabled_addons=(flush.CRASH_PROCESSES_ADDON,))
+    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
     snapshot = flush.build_crash_snapshot(flush.REASON_RAM, config)
 

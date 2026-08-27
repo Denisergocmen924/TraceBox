@@ -5,9 +5,14 @@ Envanter, metriklerin aksine NADİREN değişir: işlemci modeli, çekirdek say�
 toplam RAM, disk, işletim sistemi sürümü. Bu yüzden ayrı bir uç noktaya gider
 (POST /inventory) ve devices satırının üzerine yazılır — zaman serisi değildir.
 
-Statik eklentiler (gpu_model, external_ip) M7'de bu modüle eklenecek.
-
-M2 KAPSAMI: okuma ve karşılaştırma gerçek, gönderim yok.
+STATİK EKLENTİLER — ikisi de "nadiren değişir" tanımına uyar ama farklı
+yerlerden gelir:
+  * gpu_model — makinede okunur, eklenti açıksa doldurulur (aşağıda).
+  * external_ip — agent GÖNDERMEZ. Cihazın kendi dış IP'sini bildirmesi,
+    cihazın kendi kimliği hakkında sunucuya bilgi vermesi demekti; agent
+    yanlış bir IP yazabilirdi. Değeri, isteği gerçekten alan tarafta
+    (collector, proxy başlığından) yazılır. Kullanıcının açık/kapalı tercihi
+    yine buradan gider: enabled_addons listesi payload'da taşınıyor.
 """
 
 from __future__ import annotations
@@ -20,7 +25,8 @@ import psutil
 
 from agent import __version__
 from agent.core.clock import epoch_to_utc_iso
-from agent.core.config import Config
+from agent.core.config import ADDON_GPU, Config
+from agent.core.gpu import GpuReader
 from agent.core.metrics import BYTES_PER_MB, DISK_MOUNT_POINT
 
 # İşlemci modelinin okunduğu yer. platform.processor() Linux'ta çoğunlukla
@@ -45,6 +51,9 @@ class Inventory:
     last_boot: str
     agent_version: str
     enabled_addons: list[str]
+
+    # Statik eklenti: gpu eklentisi kapalıyken None kalır.
+    gpu_model: str | None = None
 
     def as_dict(self) -> dict:
         """Karşılaştırmaya ve gönderime uygun sözlük hali.
@@ -77,6 +86,9 @@ def collect_inventory(config: Config) -> Inventory:
         last_boot=epoch_to_utc_iso(psutil.boot_time()),
         agent_version=__version__,
         enabled_addons=list(config.enabled_addons),
+        # Envanter açılışta bir kez okunur; GpuReader'ın burada durum
+        # taşımasına gerek yok, tek çağrılık bir nesne yeter.
+        gpu_model=GpuReader().read_model() if ADDON_GPU in config.enabled_addons else None,
     )
 
 

@@ -1,11 +1,14 @@
 """
 Ölçüm toplama — psutil ile CPU, RAM, disk ve ağ.
 
-Çekirdek metrikler: cpu_percent, ram_used_mb, disk_percent,
+Çekirdek metrikler HER ZAMAN toplanır: cpu_percent, ram_used_mb, disk_percent,
 net_sent_mb, net_recv_mb. Eklenti alanları (sıcaklık, swap, load average, GPU)
-M7'de bu modüle eklenecek; şu an toplanmıyor.
+yalnızca config'in enabled_addons listesinde adı geçiyorsa okunur; kapalıyken
+alan null kalır.
 
-M2 KAPSAMI: ölçüm gerçek, gönderim yok. Örnekler yalnızca ekrana basılır.
+Eklentilerin varsayılan olarak KAPALI olmasının sebebi ölçüm maliyeti değil,
+anlam maliyetidir: her makinede olmayan bir sütun (sıcaklık sensörü,
+NVIDIA GPU, Linux'a özgü load average) açıkça istenmeden doldurulmaz.
 """
 
 from __future__ import annotations
@@ -17,11 +20,30 @@ from dataclasses import dataclass
 import psutil
 
 from agent.core.clock import utc_now_iso
+from agent.core.config import (
+    ADDON_GPU,
+    ADDON_LOAD_AVG,
+    ADDON_SWAP,
+    ADDON_TEMPERATURE,
+    Config,
+)
+from agent.core.gpu import GpuReader
 
 # Bayt -> MB çevrimi ikili tabanda (MiB). Şema sütunları "mb" adını taşır ama
 # RAM ve disk değerleri işletim sisteminin raporladığı ikili birimdir; tek bir
 # çevrim sabiti kullanmak RAM ve ağ sayılarının aynı ölçekte kalmasını sağlar.
 BYTES_PER_MB = 1024 * 1024
+
+# Sıcaklık okunurken denenecek sensör adları, sırayla. İlk bulunan kullanılır.
+#
+# Sıra keyfi değil, DARALAN güvenilirlikte: coretemp (Intel) ve k10temp (AMD)
+# doğrudan CPU çekirdeğini ölçer; cpu_thermal ARM kartlarının (Raspberry Pi)
+# karşılığıdır; acpitz ise anakart sensörüdür ve CPU'ya yalnızca yakındır.
+#
+# Şemada sensör ADInı tutan bir sütun YOK — yani temperature_c'nin neyi
+# ölçtüğü satırdan okunamaz. Bu yüzden "bulduğun ilk sensörü al" yaklaşımı
+# kullanılmaz: aynı grafikteki iki nokta iki farklı şeyi anlatabilirdi.
+CPU_SENSOR_NAMES = ("coretemp", "k10temp", "cpu_thermal", "acpitz")
 
 # Doluluk oranının okunduğu bağlama noktası. Envanterdeki disk_total_mb de
 # buradan gelir, böylece yüzde ile toplam aynı diski anlatır.
@@ -43,6 +65,17 @@ class MetricSample:
     disk_percent: float
     net_sent_mb: float | None
     net_recv_mb: float | None
+
+    # --- eklentiler: kapalıyken None, yani sütun null kalır ---
+    # Varsayılan değerleri var çünkü çekirdek alanların aksine bunların
+    # OLMAMASI normaldir; her çağrının hepsini vermesi gerekmez.
+    temperature_c: float | None = None
+    swap_used_mb: int | None = None
+    load_avg_1: float | None = None
+    load_avg_5: float | None = None
+    load_avg_15: float | None = None
+    gpu_usage_percent: float | None = None
+    gpu_vram_used_mb: int | None = None
 
 
 @dataclass(frozen=True)
@@ -80,9 +113,16 @@ class MetricsCollector:
         self._previous_net: tuple[int, int, float] | None = None
         # psutil.cpu_percent'in taban değeri alındı mı.
         self._cpu_primed = False
+        # GPU eklentisi kapalıyken hiç kullanılmaz; nesne durum tuttuğu için
+        # (nvidia-smi var mı) toplayıcıyla aynı ömrü paylaşır.
+        self._gpu = GpuReader()
 
-    def collect(self) -> MetricReading:
+    def collect(self, config: Config) -> MetricReading:
         """Tek bir ölçüm alır.
+
+        config her çağrıda YENİDEN verilir: kullanıcı config.toml'da bir
+        eklentiyi açtığında değişiklik servis yeniden başlatılmadan geçerli
+        olsun diye (döngü her tick'te dosyayı yeniden okuyor).
 
         Fark gerektiren alanlar (cpu_percent, net_*) hesaplanamadığında None
         döner; çağıran bunu doğrudan null olarak kaydeder. 0.0 yazmak "yük
@@ -95,6 +135,11 @@ class MetricsCollector:
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage(self._disk_mount_point)
         net_sent_mb, net_recv_mb = self._network_rates()
+
+        addons = config.enabled_addons
+        gpu_usage_percent, gpu_vram_used_mb = (
+            self._gpu.read_usage() if ADDON_GPU in addons else (None, None)
+        )
 
         sample = MetricSample(
             uuid=str(uuid.uuid4()),
@@ -109,6 +154,11 @@ class MetricsCollector:
             disk_percent=round(disk.percent, 1),
             net_sent_mb=net_sent_mb,
             net_recv_mb=net_recv_mb,
+            temperature_c=_cpu_temperature() if ADDON_TEMPERATURE in addons else None,
+            swap_used_mb=_swap_used_mb() if ADDON_SWAP in addons else None,
+            **_load_average(enabled=ADDON_LOAD_AVG in addons),
+            gpu_usage_percent=gpu_usage_percent,
+            gpu_vram_used_mb=gpu_vram_used_mb,
         )
 
         # memory.percent, ram_used_mb ile aynı tanımı kullanır:
@@ -160,3 +210,67 @@ class MetricsCollector:
         sent_rate = (counters.bytes_sent - previous_sent) / BYTES_PER_MB / elapsed
         recv_rate = (counters.bytes_recv - previous_recv) / BYTES_PER_MB / elapsed
         return round(sent_rate, 3), round(recv_rate, 3)
+
+
+def _cpu_temperature() -> float | None:
+    """CPU sıcaklığı (°C) — bilinen sensörlerden ilk bulunan.
+
+    Tanınan sensör yoksa None döner. "Ne bulursan onu al" DEĞİL, çünkü şemada
+    sensör adı için sütun yok: aynı sütuna bir makinede CPU, başka bir
+    makinede NVMe diskinin sıcaklığı yazılsaydı sayı karşılaştırılamaz olurdu.
+
+    sensors_temperatures Linux dışında hiç tanımlı değildir; getattr ile
+    sorulur, böylece taşınabilirlik tek satırda çözülür.
+    """
+    reader = getattr(psutil, "sensors_temperatures", None)
+    if reader is None:
+        return None
+
+    try:
+        sensors = reader()
+    except (OSError, AttributeError):
+        return None
+
+    for name in CPU_SENSOR_NAMES:
+        readings = sensors.get(name)
+        if readings and readings[0].current is not None:
+            return round(readings[0].current, 1)
+
+    return None
+
+
+def _swap_used_mb() -> int | None:
+    """Kullanılan swap (MB). Swap tanımlı değilse 0 döner — bu bir ölçümdür.
+
+    Burada None YALNIZCA okuma başarısız olduğunda döner. Swap'ı olmayan bir
+    makinede doğru cevap "ölçülemedi" değil, "sıfır kullanılıyor"dur.
+    """
+    try:
+        return psutil.swap_memory().used // BYTES_PER_MB
+    except (OSError, RuntimeError):
+        return None
+
+
+def _load_average(*, enabled: bool) -> dict[str, float | None]:
+    """1/5/15 dakikalık yük ortalaması — Linux'a özgü.
+
+    Üç alan tek fonksiyondan çıkar çünkü tek bir çağrının üç parçasıdır;
+    birini alıp diğerini alamamak mümkün değil.
+
+    Windows'ta psutil bu değeri taklit eder ama ilk çağrıdan sonra 5 saniye
+    boyunca anlamsız değer verir; MVP Linux olduğu için sorun bugün yok,
+    yine de hata hali sessizce null'a düşer.
+    """
+    if not enabled:
+        return {"load_avg_1": None, "load_avg_5": None, "load_avg_15": None}
+
+    try:
+        one, five, fifteen = psutil.getloadavg()
+    except (OSError, AttributeError):
+        return {"load_avg_1": None, "load_avg_5": None, "load_avg_15": None}
+
+    return {
+        "load_avg_1": round(one, 2),
+        "load_avg_5": round(five, 2),
+        "load_avg_15": round(fifteen, 2),
+    }

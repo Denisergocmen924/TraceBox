@@ -120,7 +120,7 @@ def _startup_inventory(config: Config, state: State) -> Inventory | None:
     return current
 
 
-def _collect(collector: MetricsCollector, spool: Spool) -> MetricReading:
+def _collect(collector: MetricsCollector, spool: Spool, config: Config) -> MetricReading:
     """Ölçüm alıp spool'a yazar ve okumayı geri döndürür.
 
     Pause'da da çalışır: pause yalnızca buluta göndermeyi durdurur, yerel kaydı
@@ -129,7 +129,7 @@ def _collect(collector: MetricsCollector, spool: Spool) -> MetricReading:
     Spool'a yalnızca reading.sample yazılır; yanındaki ram_percent kaydedilmez,
     eşik karşılaştırmasını yapacak olan çağırana verilir.
     """
-    reading = collector.collect()
+    reading = collector.collect(config)
     spool.add(RECORD_METRIC, asdict(reading.sample))
     _log(f"[collect] {_format_sample(reading.sample)}")
     return reading
@@ -406,6 +406,10 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
     )
     _log(f"[start] logging_enabled={state.logging_enabled}")
     _log(
+        "[start] eklentiler: "
+        + (", ".join(config.enabled_addons) if config.enabled_addons else "yok (yalnızca çekirdek)")
+    )
+    _log(
         "[start] journal cursor: "
         + ("kayıtlı — kaldığı yerden" if state.journal_cursor else "yok — şimdiden başlanacak")
     )
@@ -430,7 +434,7 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
             config = loader.load()
 
             if now >= next_collect:
-                reading = _collect(collector, spool)
+                reading = _collect(collector, spool, config)
                 urgent_logs = _collect_logs(log_source, spool, state, store)
                 next_collect = now + config.collect_interval_seconds
 

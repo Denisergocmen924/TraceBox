@@ -29,6 +29,25 @@ INSECURE_PERMISSION_BITS = (
     stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH
 )
 
+# Seçilebilir eklentilerin adları. Tek tanım yeri BURASI: eklentiyi toplayan
+# modüller (metrics, inventory, flush) bu sabitleri import eder, böylece
+# config.toml'daki metinle kodun beklediği metin ayrışamaz.
+ADDON_TEMPERATURE = "temperature"
+ADDON_SWAP = "swap"
+ADDON_LOAD_AVG = "load_avg"
+ADDON_GPU = "gpu"
+ADDON_EXTERNAL_IP = "external_ip"
+ADDON_CRASH_PROCESSES = "crash_processes"
+
+KNOWN_ADDONS = (
+    ADDON_TEMPERATURE,
+    ADDON_SWAP,
+    ADDON_LOAD_AVG,
+    ADDON_GPU,
+    ADDON_EXTERNAL_IP,
+    ADDON_CRASH_PROCESSES,
+)
+
 # Config'de bulunması ZORUNLU alanlar. Eksikse agent açılışta durur; varsayılan
 # uydurmak, yanlış adrese veri göndermeye çalışan bir agent üretirdi.
 REQUIRED_KEYS = ("collector_url", "device_key")
@@ -140,6 +159,17 @@ def _parse(raw: dict, *, warn) -> Config:
     addons = raw.get("enabled_addons", [])
     if not isinstance(addons, list) or not all(isinstance(a, str) for a in addons):
         raise ConfigError("'enabled_addons' string listesi olmalı")
+
+    # Tanınmayan ad HATA DEĞİL, uyarıdır: yazım hatası yüzünden agent'ı
+    # başlatmamak, bir eklentinin toplanmamasından daha ağır bir sonuç olurdu.
+    # Ama sessiz de kalınmaz — "temprature" yazan kullanıcı, sıcaklık sütunu
+    # neden hep null diye günlerce bakabilirdi.
+    unknown = [name for name in addons if name not in KNOWN_ADDONS]
+    if unknown:
+        warn(
+            f"enabled_addons içinde tanınmayan ad: {', '.join(unknown)} — "
+            f"yok sayılıyor. Geçerli değerler: {', '.join(KNOWN_ADDONS)}"
+        )
 
     return Config(
         collector_url=raw["collector_url"].strip().rstrip("/"),

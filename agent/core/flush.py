@@ -21,7 +21,7 @@ import uuid
 import psutil
 
 from agent.core.clock import seconds_since_iso, utc_now_iso
-from agent.core.config import Config
+from agent.core.config import ADDON_CRASH_PROCESSES, Config
 from agent.core.metrics import BYTES_PER_MB, MetricSample
 
 # crash_snapshots.trigger_reason'ın alabileceği dört değer. Şemadaki check
@@ -35,10 +35,6 @@ REASON_DISK = "disk"
 # yukarıdan aşağıya denenir ve ilk tutan yazılır: log en üstte, çünkü diğer üçü
 # "yük yüksek" derken log "bir şey bozuldu" der.
 REASON_ORDER = (REASON_LOG, REASON_RAM, REASON_CPU, REASON_DISK)
-
-# Süreç listesi yalnızca bu eklenti açıkken doldurulur; kapalıyken satır yine
-# yazılır ama processes boş kalır.
-CRASH_PROCESSES_ADDON = "crash_processes"
 
 # Snapshot'a kaç süreç girer.
 TOP_PROCESS_COUNT = 5
@@ -159,7 +155,9 @@ def build_crash_snapshot(reason: str, config: Config) -> dict:
     süreç listesiyle döner: eksik bir kayıt, hiç kayıt olmamasından iyidir.
     """
     processes: list[dict] = []
-    if CRASH_PROCESSES_ADDON in config.enabled_addons:
+    # Süreç listesi yalnızca eklenti açıkken doldurulur; kapalıyken satır
+    # yine yazılır ama processes boş kalır.
+    if ADDON_CRASH_PROCESSES in config.enabled_addons:
         try:
             processes = _top_processes(reason, TOP_PROCESS_COUNT)
         except psutil.Error:
