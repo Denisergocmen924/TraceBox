@@ -3,14 +3,20 @@ Cihazdan gelen yazma uçları: POST /inventory, POST /ingest, GET /verify.
 
 Üçü de cihaz anahtarı ile korunur. Payload'da `device_id` YOKTUR; satırlara
 `device_id` ve `account_id` doğrulanmış anahtardan eklenir.
+
+Aynı ilkenin ikinci uygulaması `external_ip`tir: cihaz onu da GÖNDERMEZ.
+Kimlik gibi, adres de cihazın kendi beyanı olamaz — değeri isteği gerçekten
+alan taraf yazar (aşağıda `_external_ip`).
 """
 
 from __future__ import annotations
 
+import logging
+from ipaddress import ip_address
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from auth import AuthenticatedDevice, DeviceIdentity
@@ -18,6 +24,8 @@ from db_access import call_or_503, server_now
 from endpoints_commands import process_acks
 from version import COLLECTOR_VERSION
 from supabase_client import get_client
+
+logger = logging.getLogger("tracebox.ingest")
 
 router = APIRouter()
 
@@ -29,6 +37,24 @@ MAX_ROWS_PER_TABLE = 1000
 # tabloda birincil anahtardır.
 UUID_FIELD = "uuid"
 ID_COLUMN = "id"
+
+# Dış IP'nin okunduğu başlık. Fly'ın proxy'si bunu KENDİSİ yazar ve istemcinin
+# gönderdiği değeri ezer; `X-Forwarded-For` ise istemcinin önüne kendi
+# uydurduğu adresleri ekleyebildiği bir listedir, yani kaynak olarak
+# kullanılamaz.
+#
+# Başlık yoksa (yerel çalıştırma, başka bir barındırıcı) değer null kalır.
+# Soketin karşı ucuna düşmek bir seçenek DEĞİL: proxy arkasında o adres
+# proxy'nin kendisidir ve cihazın adresi diye kaydedilmesi, boş bırakmaktan
+# daha kötüdür.
+CLIENT_IP_HEADER = "Fly-Client-IP"
+
+# Eklentinin adı burada TEKRAR tanımlanır; agent'tan import EDİLMEZ. İki taraf
+# ayrı deploy edilen ayrı programlar (collector imajında agent kodu yok);
+# paylaştıkları şey Python nesnesi değil, wire sözleşmesidir. Adın iki tarafta
+# aynı kaldığını tests/test_ingest_external_ip.py sınar — aynı yöntem log
+# seviyeleri ve flush sebepleri için de kullanılıyor.
+EXTERNAL_IP_ADDON = "external_ip"
 
 
 class _Payload(BaseModel):
@@ -56,7 +82,8 @@ class InventoryIn(_Payload):
     last_boot: AwareDatetime | None = None
     agent_version: str | None = None
     gpu_model: str | None = None
-    external_ip: str | None = None
+    # external_ip BURADA YOK. `extra="forbid"` sayesinde alanın yokluğu pasif
+    # bir eksiklik değil aktif bir REDDİR: göndermeye çalışan agent 422 alır.
     enabled_addons: list[str] = Field(default_factory=list)
 
 
@@ -127,12 +154,24 @@ class IngestIn(_Payload):
 
 
 @router.post("/inventory")
-async def post_inventory(payload: InventoryIn, device: AuthenticatedDevice) -> dict:
+async def post_inventory(
+    payload: InventoryIn,
+    device: AuthenticatedDevice,
+    fly_client_ip: Annotated[str | None, Header()] = None,
+) -> dict:
     """Envanteri cihaz satırına yazar.
 
     Envanter zaman serisi değildir: her gönderim bir öncekinin üzerine yazar.
+
+    `external_ip` gövdeden değil BAŞLIKTAN türetilir ve yalnızca burada yazılır.
+    Adresin tazeliği envanterin tazeliği kadardır (açılışta + değiştiğinde);
+    daha sık güncellemek `/ingest`e de aynı iki satırı koymak demek olurdu ama
+    o zaman rızayı okumak için cihaz satırındaki `enabled_addons`a bakmak
+    gerekirdi. Alan "statik eklenti" olarak tanımlandığı için bu değiş tokuş
+    bugün yapılmadı.
     """
     fields = payload.model_dump(mode="json")
+    fields["external_ip"] = _external_ip(fly_client_ip, payload.enabled_addons)
     fields["last_seen"] = server_now()
 
     await call_or_503(lambda: get_client().update_device(device.id, fields))
@@ -191,6 +230,32 @@ async def get_verify(device: AuthenticatedDevice) -> dict:
         "device_name": device.device_name,
         "version": COLLECTOR_VERSION,
     }
+
+
+def _external_ip(header_value: str | None, enabled_addons: list[str]) -> str | None:
+    """Proxy'nin bildirdiği istemci adresi — eklenti kapalıysa None.
+
+    Rıza her gönderimde YENİDEN sorulur ve kapalıyken açıkça None yazılır:
+    kullanıcı eklentiyi kapattığında `enabled_addons` değiştiği için envanter
+    zaten yeniden gönderilir, o gönderim de daha önce kaydedilmiş adresi siler.
+    "Yazmamak" yetmezdi — eski değer satırda kalırdı.
+
+    Değer ayrıca IP olarak ÇÖZÜLEBİLDİĞİ doğrulanır. Beklenmedik bir şey gelmesi
+    proxy zincirinin varsayıldığı gibi olmadığını gösterir; onu olduğu gibi
+    kaydetmek metin sütununa güvenilmeyen girdi yazmak olurdu.
+    """
+    if EXTERNAL_IP_ADDON not in enabled_addons:
+        return None
+
+    if not header_value:
+        return None
+
+    try:
+        return str(ip_address(header_value.strip()))
+    except ValueError:
+        # Değerin kendisi loglanmaz: doğrulanmamış, dışarıdan gelen bir metin.
+        logger.warning("%s başlığı IP adresi olarak çözülemedi", CLIENT_IP_HEADER)
+        return None
 
 
 def _row(item: BaseModel, device: DeviceIdentity) -> dict[str, Any]:
