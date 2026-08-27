@@ -26,7 +26,7 @@
 --     çalıştırılırsa canlı collector olmayan bir sütunu istemeye devam eder ve
 --     cihaz kimliği doğrulanamaz (device key ile gelen her istek hata alır).
 --
--- TARİH: 2026-08-26 — M6 (Komutlar). Karar: md/memory/decisions.md.
+-- TARİH: 2026-08-26 — M6 (Komutlar).
 -- =============================================================================
 
 alter table public.devices drop column if exists pending_delete;
