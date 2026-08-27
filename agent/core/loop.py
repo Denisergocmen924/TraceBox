@@ -7,9 +7,9 @@ yazar eklerdi. Tüm işler tick sayaçlarıyla sıraya girer.
 Tick sabit 1 saniyedir ve config'den okunmaz; collect/send/poll aralıkları
 birbirinden bağımsız sayaçlardır.
 
-M6 KAPSAMI: ölçümler ve sistem logları spool'a yazılıp collector'a gönderilir,
-komutlar (pause/resume/delete) poll ile alınıp uygulanır. Acil flush M7'de
-bu döngüye bağlanacak.
+M7 KAPSAMI: ölçümler ve sistem logları spool'a yazılıp collector'a gönderilir,
+komutlar (pause/resume/delete) poll ile alınıp uygulanır, eşik aşıldığında
+gönderim turu beklenmeden acil flush yapılır.
 """
 
 from __future__ import annotations
@@ -23,16 +23,23 @@ from dataclasses import asdict
 
 from agent import __version__
 from agent.core import commands as commands_module
+from agent.core import flush as flush_module
 from agent.core import inventory as inventory_module
 from agent.core.clock import utc_now_iso
 from agent.core.commands import CommandError, CommandPoller
 from agent.core.config import Config, ConfigLoader
 from agent.core.inventory import Inventory
-from agent.core.metrics import MetricSample, MetricsCollector
+from agent.core.metrics import MetricReading, MetricSample, MetricsCollector
 from agent.core.shipper import Shipper
-from agent.core.spool import RECORD_LOG, RECORD_METRIC, Spool
+from agent.core.spool import RECORD_CRASH, RECORD_LOG, RECORD_METRIC, Spool
 from agent.core.state import State, StateStore
-from agent.logsources.base import LEVELS, LogRecord, LogSource, LogSourceError
+from agent.logsources.base import (
+    LEVELS,
+    URGENT_LEVELS,
+    LogRecord,
+    LogSource,
+    LogSourceError,
+)
 
 # Döngünün nabzı. Config'e AÇILMAZ: ölçüm sıklığı (insan sınırı) ile döngü ritmi
 # (sistem sabiti) ayrı kavramlardır.
@@ -113,15 +120,19 @@ def _startup_inventory(config: Config, state: State) -> Inventory | None:
     return current
 
 
-def _collect(collector: MetricsCollector, spool: Spool) -> None:
-    """Ölçüm alıp spool'a yazar.
+def _collect(collector: MetricsCollector, spool: Spool, config: Config) -> MetricReading:
+    """Ölçüm alıp spool'a yazar ve okumayı geri döndürür.
 
     Pause'da da çalışır: pause yalnızca buluta göndermeyi durdurur, yerel kaydı
     değil.
+
+    Spool'a yalnızca reading.sample yazılır; yanındaki ram_percent kaydedilmez,
+    eşik karşılaştırmasını yapacak olan çağırana verilir.
     """
-    sample = collector.collect()
-    spool.add(RECORD_METRIC, asdict(sample))
-    _log(f"[collect] {_format_sample(sample)}")
+    reading = collector.collect(config)
+    spool.add(RECORD_METRIC, asdict(reading.sample))
+    _log(f"[collect] {_format_sample(reading.sample)}")
+    return reading
 
 
 def _log_payload(record: LogRecord) -> dict:
@@ -151,8 +162,13 @@ def _level_summary(records: list[LogRecord]) -> str:
     return " ".join(f"{level}={counts[level]}" for level in LEVELS if counts[level])
 
 
-def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateStore) -> None:
+def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateStore) -> int:
     """Cursor'dan beri biriken logları okuyup spool'a yazar.
+
+    Dönen değer, bu turda okunan error|critical kayıtların sayısıdır — acil
+    gönderim kararını döngü buna bakarak verir (CLAUDE.md §7). Sayı BURADA
+    üretilir çünkü kayıtlar yalnızca burada elde tutulur; spool'a yazıldıktan
+    sonra hangisinin bu turda geldiğini ayırt etmenin ucuz bir yolu kalmaz.
 
     Pause'da da çalışır: metrik toplama gibi, log toplama da yerel kayıttır.
 
@@ -167,7 +183,7 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
         # Log kaynağı erişilemez diye metrik toplama ve gönderim durmaz;
         # tur log'suz sürer, sorun bir sonraki turda yeniden denenir.
         _log(f"[logs] okunamadı: {error}")
-        return
+        return 0
 
     for record in records:
         spool.add(RECORD_LOG, _log_payload(record))
@@ -178,6 +194,8 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
 
     if records:
         _log(f"[logs] {len(records)} kayıt ({_level_summary(records)})")
+
+    return sum(1 for record in records if record.level in URGENT_LEVELS)
 
 
 def _prune_acked(state: State, store: StateStore, acked: list[str]) -> None:
@@ -291,6 +309,70 @@ def _send_spool(
     _log(f"[send] {result.sent} kayıt gönderildi (spool: {spool.count()}).")
 
 
+def _maybe_flush(
+    reading: MetricReading,
+    urgent_log_count: int,
+    config: Config,
+    state: State,
+    store: StateStore,
+    spool: Spool,
+    shipper: Shipper,
+) -> bool:
+    """Eşik aşıldıysa acil gönderim yapar. Gönderim yapıldıysa True döner.
+
+    Pause kapısı BURADADIR, çağıranda değil: acil gönderim de "buluta
+    yükleme"dir ve pause bunu durdurur (CLAUDE.md §7). Kural, yüklemeyi yapan
+    fonksiyonun içinde durursa yeni bir çağıran eklendiğinde unutulamaz.
+    Komut poll'ünün aksine burada istisna yoktur — flush telemetridir,
+    teardown kontrol mesajı değil.
+
+    Pause'da eşiğe hiç bakılmaz: ölçüm ve loglar spool'a yazılmaya devam eder,
+    resume anında hepsi çıkar. crash_snapshots satırı da yazılmaz, çünkü o
+    satırın anlamı "flush attı"dır — atmadığı bir anda yazılsa yalan söylerdi.
+    """
+    if not state.logging_enabled:
+        return False
+
+    reason = flush_module.evaluate(
+        sample=reading.sample,
+        ram_percent=reading.ram_percent,
+        urgent_log_count=urgent_log_count,
+        config=config,
+    )
+    if reason is None:
+        return False
+
+    if flush_module.cooldown_active(state.last_flush_at, config.flush_cooldown_seconds):
+        # Veri kaybolmaz: eşiği aşan ölçüm de, tetikleyen log da spool'da
+        # duruyor ve normal gönderim turunda çıkacak. Bastırılan tek şey
+        # ACELE etmek — cooldown'ın amacı zaten flush selini önlemek.
+        _log(f"[flush] {reason} eşiği aşıldı, cooldown sürüyor — atlandı.")
+        return False
+
+    # SIRA ÖNEMLİDİR: snapshot önce spool'a yazılır, sonra gönderim yapılır.
+    # Ters sırada snapshot bir sonraki tura kalır ve kendisini tetikleyen
+    # ölçümden ayrı bir istekte giderdi.
+    spool.add(RECORD_CRASH, flush_module.build_crash_snapshot(reason, config))
+
+    # Damga gönderimden ÖNCE yazılır: gönderim başarısız olsa bile cooldown
+    # başlamış sayılır. Aksi halde collector erişilemezken eşik her turda
+    # yeniden tutar, her tur yeni bir snapshot üretilir ve spool kesintinin
+    # sürdüğü süre boyunca boş yere şişerdi.
+    state.last_flush_at = utc_now_iso()
+    store.save(state)
+
+    if not shipper.ready():
+        _log(
+            f"[flush] {reason} eşiği aşıldı — backoff sürüyor, "
+            f"{shipper.backoff_seconds:.0f} sn sonra gönderilecek."
+        )
+        return False
+
+    _log(f"[flush] {reason} eşiği aşıldı — acil gönderim.")
+    _send_spool(shipper, config, state, store, spool)
+    return True
+
+
 def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
     """Agent'ı açılıştan kapanışa kadar çalıştırır.
 
@@ -324,6 +406,10 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
     )
     _log(f"[start] logging_enabled={state.logging_enabled}")
     _log(
+        "[start] eklentiler: "
+        + (", ".join(config.enabled_addons) if config.enabled_addons else "yok (yalnızca çekirdek)")
+    )
+    _log(
         "[start] journal cursor: "
         + ("kayıtlı — kaldığı yerden" if state.journal_cursor else "yok — şimdiden başlanacak")
     )
@@ -348,9 +434,18 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
             config = loader.load()
 
             if now >= next_collect:
-                _collect(collector, spool)
-                _collect_logs(log_source, spool, state, store)
+                reading = _collect(collector, spool, config)
+                urgent_logs = _collect_logs(log_source, spool, state, store)
                 next_collect = now + config.collect_interval_seconds
+
+                # Eşik ölçümün HEMEN ardından değerlendirilir: tetikleyen örnek
+                # ve loglar spool'a yeni yazıldı, yani acil gönderim onları da
+                # götürür. Pause denetimi _maybe_flush'ın içindedir.
+                # Flush gerçekten gönderdiyse normal gönderim sayacı ileri
+                # alınır — az önce boşalan spool'u saniyeler sonra bir kez daha
+                # yoklamanın anlamı yok.
+                if _maybe_flush(reading, urgent_logs, config, state, store, spool, shipper):
+                    next_send = now + config.send_interval_seconds
 
             if now >= next_poll:
                 if _poll_commands(poller, config, state, store, spool, shipper):

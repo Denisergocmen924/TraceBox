@@ -31,4 +31,8 @@ PAKET YAPISI:
 # 0.2.0: agent artık uzaktan komut alıyor (pause/resume/delete). Davranış farkı
 # teşhis için önemli — dashboard'dan verilen bir pause'un neden işlemediğinin
 # ilk cevabı "cihazda hangi sürüm var?" sorusudur.
-__version__ = "0.2.0"
+#
+# 0.3.0: acil gönderim (flush) devrede — eşik aşıldığında veri 30 saniyelik
+# turu beklemiyor. Bir cihazın verisi "neden tam çöküş anında var / yok"
+# sorusunun cevabı doğrudan bu sürüm sınırıdır.
+__version__ = "0.3.0"

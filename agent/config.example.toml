@@ -59,6 +59,9 @@ spool_max_size_mb = 200
 #   "load_avg"        yük ortalaması (Linux)  -> metrics.load_avg_1/5/15
 #   "gpu"             GPU kullanımı + VRAM    -> metrics.gpu_usage_percent, gpu_vram_used_mb
 #   "external_ip"     dış IP (statik)         -> devices.external_ip
+#                     Değeri agent GÖNDERMEZ: isteği alan taraf (collector)
+#                     bağlantının kaynak IP'sinden yazar. Buradaki tercih
+#                     yalnızca "yazılsın mı" sorusunu cevaplar.
 #   "crash_processes" flush anında en çok kaynak yiyen 5 süreç -> crash_snapshots
 #
 # Örnek: enabled_addons = ["swap", "load_avg"]

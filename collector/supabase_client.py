@@ -69,7 +69,7 @@ DEVICE_WRITABLE_COLUMNS = frozenset(
     {
         # komut ack'inin türettiği durum
         "logging_enabled",
-        # agent'ın envanterden bildirdikleri (InventoryIn ile aynı 14 alan)
+        # agent'ın envanterden bildirdikleri (InventoryIn ile aynı 13 alan)
         "cpu_model",
         "cpu_cores_physical",
         "cpu_cores_logical",
@@ -82,10 +82,12 @@ DEVICE_WRITABLE_COLUMNS = frozenset(
         "last_boot",
         "agent_version",
         "gpu_model",
-        "external_ip",
         "enabled_addons",
-        # sunucunun damgaladığı
+        # sunucunun kendi bildiklerinden yazdıkları: varış anı ve bağlantının
+        # geldiği adres. external_ip listede ama InventoryIn'de DEĞİL — cihaz
+        # onu gönderemez, collector proxy başlığından türetir (M7).
         "last_seen",
+        "external_ip",
     }
 )
 
