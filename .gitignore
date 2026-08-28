@@ -50,11 +50,12 @@ spool.db-*
 dev/
 
 # --- Dashboard (Next.js, M9) -------------------------------------------------
+# Barındırma Fly (collector'dan ayrı bir app) — Vercel değil, bkz. CLAUDE.md §9.1.
 node_modules/
 .next/
 out/
 next-env.d.ts
-.vercel
+*.tsbuildinfo
 
 # --- Editör / işletim sistemi ------------------------------------------------
 .DS_Store
@@ -72,3 +73,6 @@ Thumbs.db
 # Makinede duran, repoya girmeyen yardımcı dosyalar.
 CLAUDE.md
 md/
+
+# --- YEREL ÖRNEK DASHBOARD GÖRSELLERİ ----------------------------------------
+dashboard/example

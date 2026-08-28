@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/*
+ * Görsel dil — CLAUDE.md §9.11.
+ * Renkler burada BİR KEZ tanımlanır; bileşenlerde ham hex kullanılmaz.
+ * Sebep: landing (§9.12) ile dashboard aynı dili konuşacak. Renk her dosyaya
+ * elle yazılsaydı, marka tonu değiştiğinde onlarca yerde ayrı ayrı kayardı.
+ */
+@theme {
+  --color-bg: #0a0f1f; /* koyu lacivert zemin */
+  --color-panel: #121a30; /* paneller: zeminden bir ton açık */
+  --color-panel-2: #182241; /* panel içi vurgusuz yüzey (input, satır) */
+  --color-line: #223052; /* ince, düşük kontrastlı çerçeve */
+  --color-fg: #e6ebf5; /* normal metin */
+  --color-muted: #8b97b0; /* ikincil metin */
+  --color-accent: #6366f1; /* indigo — YALNIZCA aksiyon ve seçili durum */
+  --color-accent-strong: #4f46e5;
+  --color-ok: #22c55e;
+  --color-warn: #f59e0b;
+  --color-danger: #ef4444;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
