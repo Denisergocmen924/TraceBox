@@ -25,7 +25,8 @@ altında.
 | Yol | Durum |
 |---|---|
 | `/login` | **Geçici**, süssüz giriş formu. Kayıt ekranı YOK (§9.2) |
-| `/devices` | İskelet — oturum koruması çalışıyor, kartlar sonraki dilimde (§9.3) |
+| `/devices` | ✅ Cihaz kartları — künye, dört durum rozeti, üç ölçü çubuğu (§9.3) |
+| `/devices/[id]` | Yer tutucu — detay ekranı sonraki dilimde (§9.4) |
 | `/` | Ekran değil, yol ayrımı: oturum varsa `/devices`, yoksa `/login` |
 
 `/login` bilerek süssüzdür. §9.12'deki kara kutu animasyonlu vitrin **en son** yapılır;
@@ -58,18 +59,25 @@ dashboard/
 │   ├── globals.css         # görsel dil tokenleri (§9.11) — renkler BURADA, bileşende değil
 │   ├── page.tsx            # yol ayrımı
 │   ├── login/page.tsx      # geçici giriş formu
-│   └── devices/page.tsx    # ekran 2 (iskelet)
+│   └── devices/
+│       ├── page.tsx        # ekran 2 — ızgara, 10 sn yenileme
+│       ├── DeviceCard.tsx  # kart: künye + rozet + üç çubuk
+│       └── [id]/page.tsx   # ekran 3 (yer tutucu)
 ├── lib/
 │   ├── supabase.ts         # tek istemci, tembel kurulum
-│   └── useSession.ts       # loading / signedIn / signedOut — üçü AYRI hâl
+│   ├── useSession.ts       # loading / signedIn / signedOut — üçü AYRI hâl
+│   ├── devices.ts          # sorgu + dört durumun türetilmesi
+│   └── time.ts             # "12 saniye önce", MB→GB
 ├── next.config.ts          # output: standalone (Fly Docker imajı için)
 └── postcss.config.mjs      # Tailwind v4 — tailwind.config.js YOK, tema CSS içinde
 ```
 
 ## Henüz yapılmayanlar
 
+- **Cihaz detayı (§9.4)** — dört dilim: yerleşim + sağ panel, log listesi,
+  zaman çizelgesi (migration ister), aksiyonlar + onay penceresi.
 - **Deploy:** collector'dan **ayrı** bir Fly app olacak (§9.1). Dockerfile + fly.toml
-  cihaz listesi çalışır hâle gelince yazılır.
+  henüz yazılmadı.
 - **CORS:** collector'da CORS middleware yok — "Cihaz Ekle" tarayıcıdan bugün bloklanır
   (§9.13). Dashboard'ın origin'i belli olunca eklenecek.
 - **Grafik seyreltmesi:** cihaz detayı için bir migration çıkacak (§9.7).
