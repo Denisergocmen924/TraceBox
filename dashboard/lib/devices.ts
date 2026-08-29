@@ -78,6 +78,17 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
   deleting: "Silinme bekliyor",
 };
 
+/**
+ * Kart için gereken en küçük sütun kümesi + gömülü son metrik.
+ * Detay ekranı (§9.4) bunun üstüne envanterin kalanını ekler.
+ */
+const LIST_COLUMNS = `id, device_name, os_name, os_version, arch, cpu_cores_logical,
+   ram_total_mb, disk_total_mb, agent_version, logging_enabled, last_seen,
+   metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent )`;
+
+const DETAIL_COLUMNS = `${LIST_COLUMNS}, cpu_model, cpu_cores_physical,
+   kernel_version, last_boot, gpu_model, external_ip, enabled_addons`;
+
 export async function fetchDevices(): Promise<Device[]> {
   const client = supabase();
 
@@ -87,11 +98,7 @@ export async function fetchDevices(): Promise<Device[]> {
   // zaten var, sorgu o indeksin üstünden yürür.
   const devicesQuery = client
     .from("devices")
-    .select(
-      `id, device_name, os_name, os_version, arch, cpu_cores_logical,
-       ram_total_mb, disk_total_mb, agent_version, logging_enabled, last_seen,
-       metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent )`,
-    )
+    .select(LIST_COLUMNS)
     .order("measured_at", { referencedTable: "metrics", ascending: false })
     .limit(1, { referencedTable: "metrics" })
     .order("device_name");
@@ -119,4 +126,65 @@ export async function fetchDevices(): Promise<Device[]> {
       deletePending: pending.has(device.id),
     }),
   );
+}
+
+/* --- Cihaz detayı (§9.4) -------------------------------------------------- */
+
+/** Sağ paneldeki künye — listede gereksiz olan envanter alanları. */
+export type DeviceDetail = Device & {
+  cpu_model: string | null;
+  cpu_cores_physical: number | null;
+  kernel_version: string | null;
+  last_boot: string | null;
+  gpu_model: string | null;
+  external_ip: string | null;
+  enabled_addons: string[];
+};
+
+/** Postgres: geçersiz UUID metni. Uydurulmuş bir URL hataya değil, 404'e düşmeli. */
+const INVALID_TEXT_REPRESENTATION = "22P02";
+
+/**
+ * Tek cihaz + son metriği + bekleyen silme emri.
+ *
+ * `null` dönmesi "yok" demek DEĞİL, "sana görünmüyor" demek: RLS başkasının
+ * cihazını da tam olarak böyle gizler. Ekranda ikisini ayırmaya çalışmıyoruz,
+ * çünkü ayırmak zaten bir bilgi sızıntısı olurdu.
+ */
+export async function fetchDevice(id: string): Promise<DeviceDetail | null> {
+  const client = supabase();
+
+  const deviceQuery = client
+    .from("devices")
+    .select(DETAIL_COLUMNS)
+    .eq("id", id)
+    .order("measured_at", { referencedTable: "metrics", ascending: false })
+    .limit(1, { referencedTable: "metrics" })
+    .maybeSingle();
+
+  const commandQuery = client
+    .from("commands")
+    .select("id")
+    .eq("device_id", id)
+    .eq("type", "delete")
+    .eq("status", "pending")
+    .limit(1);
+
+  const [device, commands] = await Promise.all([deviceQuery, commandQuery]);
+
+  if (device.error) {
+    if (device.error.code === INVALID_TEXT_REPRESENTATION) return null;
+    throw device.error;
+  }
+  if (!device.data) return null;
+  if (commands.error) throw commands.error;
+
+  const { metrics, ...rest } = device.data as unknown as DeviceRow &
+    Omit<DeviceDetail, keyof Device>;
+
+  return {
+    ...rest,
+    latest: metrics[0] ?? null,
+    deletePending: (commands.data ?? []).length > 0,
+  };
 }

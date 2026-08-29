@@ -10,7 +10,9 @@ doğrudan Supabase'e bağlanır. Fly'ın işi yalnızca JS/HTML sunmak (§9.1). 
 
 - Fly instance'ı küçük ve sabit yükte kalır — kullanıcı sayısı arttıkça büyümesi gerekmez.
 - Realtime (§9.9) mümkün olur; sunucu çekseydi canlı akış zaten çalışmazdı.
-- Derleme çıktısının tamamı statik (`npm run build` → tüm route'lar `○ Static`).
+- **Hiçbir route sunucuda veri çekmez.** `/devices/[id]` derleme çıktısında `ƒ` görünür
+  (dinamik segment, build anında id'ler bilinmiyor) ama sunucunun ürettiği şey boş bir
+  kabuktur; içindeki her satır tarayıcıda, kullanıcının kendi JWT'siyle iner.
 
 **Okuma:** Supabase client + user JWT; RLS (`account_id = auth.uid()`) satır bazında korur.
 **Collector'a hiçbir okuma isteği gitmez.**
@@ -26,7 +28,7 @@ altında.
 |---|---|
 | `/login` | **Geçici**, süssüz giriş formu. Kayıt ekranı YOK (§9.2) |
 | `/devices` | ✅ Cihaz kartları — künye, dört durum rozeti, üç ölçü çubuğu (§9.3) |
-| `/devices/[id]` | Yer tutucu — detay ekranı sonraki dilimde (§9.4) |
+| `/devices/[id]` | ✅ 70/30 yerleşim + künye paneli + log listesi (§9.4). Grafik ve aksiyonlar sonraki dilimlerde |
 | `/` | Ekran değil, yol ayrımı: oturum varsa `/devices`, yoksa `/login` |
 
 `/login` bilerek süssüzdür. §9.12'deki kara kutu animasyonlu vitrin **en son** yapılır;
@@ -62,20 +64,30 @@ dashboard/
 │   └── devices/
 │       ├── page.tsx        # ekran 2 — ızgara, 10 sn yenileme
 │       ├── DeviceCard.tsx  # kart: künye + rozet + üç çubuk
-│       └── [id]/page.tsx   # ekran 3 (yer tutucu)
+│       └── [id]/
+│           ├── page.tsx       # ekran 3 — 70/30 yerleşim, ortak aralık state'i
+│           ├── Timeline.tsx   # aralık düğmeleri (grafik yer tutucu)
+│           ├── LogList.tsx    # blok blok artımlı log listesi
+│           └── DetailPanel.tsx # sağ panel: künye + (devre dışı) aksiyonlar
 ├── lib/
 │   ├── supabase.ts         # tek istemci, tembel kurulum
 │   ├── useSession.ts       # loading / signedIn / signedOut — üçü AYRI hâl
-│   ├── devices.ts          # sorgu + dört durumun türetilmesi
-│   └── time.ts             # "12 saniye önce", MB→GB
+│   ├── devices.ts          # cihaz sorguları + dört durumun türetilmesi
+│   ├── logs.ts             # UTC gün blokları + seviye eşiği + sayfalama
+│   └── time.ts             # "12 saniye önce", log saati, MB→GB
 ├── next.config.ts          # output: standalone (Fly Docker imajı için)
 └── postcss.config.mjs      # Tailwind v4 — tailwind.config.js YOK, tema CSS içinde
 ```
 
 ## Henüz yapılmayanlar
 
-- **Cihaz detayı (§9.4)** — dört dilim: yerleşim + sağ panel, log listesi,
-  zaman çizelgesi (migration ister), aksiyonlar + onay penceresi.
+- **Zaman çizelgesi (§9.6–§9.8)** — seyreltme fonksiyonu bir migration gerektiriyor (§9.7).
+  Grafik gelince zoom ve "seçim log listesini de daraltır" bağı da gelir.
+- **Aksiyonlar (§9.10)** — pause/resume/delete, yıkıcı işlem onay penceresiyle birlikte.
+- **Canlı log akışı (§9.9)** — son 24 saat görünümünde Realtime; saniyede bir güncelleme
+  tavanı ve ~500 satırlık liste sınırı zorunlu.
+- **Blok tahliyesi (§9.5)** — "ekrandan 4 blok uzaklaşan bloklar bellekten atılır" kuralı
+  henüz uygulanmadı; bugünkü sınır, sayfa sayfa (200 satır) çekmenin kendisi.
 - **Deploy:** collector'dan **ayrı** bir Fly app olacak (§9.1). Dockerfile + fly.toml
   henüz yazılmadı.
 - **CORS:** collector'da CORS middleware yok — "Cihaz Ekle" tarayıcıdan bugün bloklanır

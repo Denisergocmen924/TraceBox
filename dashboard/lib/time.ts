@@ -26,3 +26,31 @@ export function gb(mb: number | null | undefined): string {
   if (mb == null) return "—";
   return `${(mb / 1024).toFixed(1)} GB`;
 }
+
+/**
+ * Log satırının zaman damgası — YEREL saatle (§9.5).
+ *
+ * Bloklar UTC'ye göre bölünüyor ama kullanıcı UTC'de yaşamıyor. Blok sınırı
+ * içeride bir önbellek detayı; ekranda görünen her saat kullanıcının kendi
+ * saatidir. Aynı gün içindeyse yalnızca saat, değilse gün de eklenir —
+ * "14:32:07" iki gün önceye aitken tek başına yanıltıcı olurdu.
+ */
+export function logTime(iso: string, now: number): string {
+  const d = new Date(iso);
+  const clock = d.toLocaleTimeString("tr-TR", { hour12: false });
+  const sameDay = d.toDateString() === new Date(now).toDateString();
+  if (sameDay) return clock;
+  return `${d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" })} ${clock}`;
+}
+
+/** "2026-08-28T09:00:00Z" → "28.08.2026 12:00" (yerel). Künyedeki açılış anı. */
+export function localDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
