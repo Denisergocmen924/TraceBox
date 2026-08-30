@@ -46,7 +46,12 @@ Bedeli, birini güncelleyip diğerini unutma riskidir — bu yüzden kural burad
 |---|-------|------|---------|
 | 0001 | `0001_received_at.sql` | `received_at` sütunu + indeksler (bulgu B5) | ✅ 2026-08-21 |
 | 0002 | `0002_commands_insert_grant.sql` | `commands` INSERT yetkisi daraltıldı (bulgu B7) | ✅ 2026-08-21 |
+| 0003 | `0003_drop_pending_delete.sql` | `devices.pending_delete` sütunu kaldırıldı | ✅ 2026-08-26 |
+| 0004 | `0004_metrics_buckets.sql` | `metrics_buckets()` grafik seyreltme fonksiyonu (§9.7) | ✅ 2026-08-30 |
 
-> Her ikisi de canlı Supabase'de **elle** çalıştırıldı; dosyalar sonradan kayda geçirildi.
+> Hepsi canlı Supabase'de **elle** çalıştırılır; dosyalar önce yazılır, sonra uygulanır.
+> "Canlıda" sütunu ✅ olmayan bir migration henüz veritabanına girmemiştir — koddan onun
+> varlığına güvenilemez.
+>
 > Yeni bir ortam kurulursa: `schema.sql` → `triggers.sql` → `rls.sql`, migration'lara gerek yok
 > (değişiklikler zaten o dosyalara işlendi). Migration'lar **mevcut** bir veritabanı içindir.

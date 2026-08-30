@@ -1,6 +1,6 @@
 -- =============================================================================
 -- TraceBox — db/rls.sql
--- Row-Level Security politikaları + kolon bazlı yetkiler.
+-- Row-Level Security politikaları + kolon bazlı yetkiler + fonksiyon yetkileri.
 --
 -- ÇALIŞTIRMA SIRASI:  schema.sql  ->  triggers.sql  ->  [rls.sql]
 --
@@ -201,9 +201,45 @@ grant insert (device_id, account_id, type) on public.commands to authenticated;
 
 
 -- -----------------------------------------------------------------------------
+-- 6) metrics_buckets — FONKSİYON ÇALIŞTIRMA yetkisi
+-- -----------------------------------------------------------------------------
+-- schema.sql'deki grafik seyreltme fonksiyonu (§9.7). Tabloya değil, fonksiyona
+-- verilen bir yetki — o yüzden RLS politikası değil, grant konusu.
+--
+-- Yetki İKİ ayrı yerden geliyor; ikisini birden kapatmak gerekiyor:
+--
+--   1. Postgres yeni bir fonksiyona EXECUTE'u varsayılan olarak PUBLIC'e verir.
+--   2. Supabase, public şemasındaki yeni fonksiyonlar için `alter default
+--      privileges ... grant all on functions to anon, authenticated,
+--      service_role` tanımlıdır — yani anon'a AYRICA, DOĞRUDAN bir grant düşer.
+--
+-- Yalnızca PUBLIC'ten almak yetmez: 2. maddedeki doğrudan grant yerinde kalır.
+-- 2026-08-30 canlı doğrulamasında tam olarak bu oldu — `from public` sonrası
+-- anon_execute hâlâ true döndü. Bu yüzden anon açıkça yazılır; yukarıdaki iki
+-- revoke (3b devices, 5b commands) da aynı sebeple rolleri tek tek sayıyor.
+--
+-- Fonksiyon SECURITY INVOKER olduğu için anon çağırsa bile RLS devrede kalır ve
+-- sıfır satır döner — ama kapatılabilecek bir kapıyı açık bırakmanın karşılığı
+-- yok. service_role bilerek dokunulmadan bırakıldı: collector zaten RLS'i
+-- bypass ediyor.
+--
+-- SECURITY INVOKER'ın kendisi schema.sql'de, fonksiyon tanımının içinde durur ve
+-- bu dosyadaki her politikadan daha kritiktir: DEFINER'a dönerse buradaki tüm
+-- select politikaları o fonksiyon üzerinden atlanır. Gerekçesi fonksiyonun
+-- başındaki yorumda.
+--
+-- İki satır da tekrar çalıştırılabilir: aynı sonucu üretir, hata vermez.
+revoke all    on function public.metrics_buckets(uuid, timestamptz, timestamptz, int) from public, anon;
+grant  execute on function public.metrics_buckets(uuid, timestamptz, timestamptz, int) to authenticated;
+
+
+-- -----------------------------------------------------------------------------
 -- DOĞRULAMA (Supabase Dashboard):
 --   1. Table Editor -> 6 tablonun da yanında yeşil "RLS enabled" rozeti olmalı.
 --   2. Advisors -> Security -> "RLS disabled in public" uyarısı KALMAMALI.
 --   3. Gerçek test (M9, dashboard hazır olunca): iki test kullanıcısı aç,
 --      birinin oturumuyla diğerinin cihazlarını sorgula -> 0 satır dönmeli.
+--   4. metrics_buckets fonksiyonu: prosecdef = false (SECURITY INVOKER) ve
+--      anon'un execute yetkisi olmamalı. Sorgusu 0004_metrics_buckets.sql
+--      dosyasının sonunda duruyor.
 -- -----------------------------------------------------------------------------
