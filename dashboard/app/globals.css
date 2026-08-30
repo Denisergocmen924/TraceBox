@@ -1,23 +1,56 @@
 @import "tailwindcss";
 
 /*
- * Görsel dil — CLAUDE.md §9.11.
- * Renkler burada BİR KEZ tanımlanır; bileşenlerde ham hex kullanılmaz.
- * Sebep: landing (§9.12) ile dashboard aynı dili konuşacak. Renk her dosyaya
- * elle yazılsaydı, marka tonu değiştiğinde onlarca yerde ayrı ayrı kayardı.
+ * Görsel dil — dashboard/example/TraceBox Dashboard Tasarım Planı.md.
+ *
+ * Renkler burada BİR KEZ tanımlanır; bileşenlerde ham hex kullanılmaz. Sebep:
+ * landing (§9.12) ile dashboard aynı dili konuşacak. Renk her dosyaya elle
+ * yazılsaydı, marka tonu değiştiğinde onlarca yerde ayrı ayrı kayardı.
+ *
+ * Planın §2 maddesi tek bir kural koyuyor: "Renkleri yalnızca dekorasyon için
+ * değil, DURUM ve METRİC ayrımı için kullan." Bu yüzden paletin yarısı isimden
+ * anlam taşıyor — --color-cpu bir mavi tonu değil, "CPU şu renkle çizilir"
+ * sözleşmesi. Bileşen dosyaları hangi maviyi seçeceğine karar vermez.
  */
 @theme {
-  --color-bg: #0a0f1f; /* koyu lacivert zemin */
-  --color-panel: #121a30; /* paneller: zeminden bir ton açık */
-  --color-panel-2: #182241; /* panel içi vurgusuz yüzey (input, satır) */
-  --color-line: #223052; /* ince, düşük kontrastlı çerçeve */
-  --color-fg: #e6ebf5; /* normal metin */
-  --color-muted: #8b97b0; /* ikincil metin */
-  --color-accent: #6366f1; /* indigo — YALNIZCA aksiyon ve seçili durum */
-  --color-accent-strong: #4f46e5;
+  /* --- yüzeyler: zemin en koyu, panel bir ton açık (plan §1) ------------- */
+  --color-bg: #060a14;
+  --color-bg-soft: #080d1a; /* sidebar / toolbar — zeminden ayrılsın */
+  --color-panel: #0e1424; /* kart ve panel gövdesi */
+  --color-panel-2: #141c30; /* panel İÇİ vurgusuz yüzey: input, satır, çubuk yatağı */
+  --color-line: #1e2740; /* ince ve DÜŞÜK KONTRASTLI çerçeve (plan §1) */
+
+  /* --- metin ------------------------------------------------------------- */
+  --color-fg: #e8edf7;
+  --color-muted: #8794ad;
+  --color-faint: #5a6580; /* eksen etiketi, ızgara yazısı — muted'in altı */
+
+  /* --- birincil aksiyon: indigo / electric blue (plan §2) ----------------- */
+  --color-accent: #4f5dfb;
+  --color-accent-strong: #3f4ce8;
+  --color-accent-soft: #1b2450; /* seçili satır zemini, ikon kutusu */
+
+  /* --- durum renkleri (plan §2) ------------------------------------------ */
   --color-ok: #22c55e;
   --color-warn: #f59e0b;
   --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  /*
+   * --- metrik renkleri ---------------------------------------------------
+   * Plan §2: primary indigo, secondary violet, "network ve I/O metriklerinde
+   * cyan". Disk bir I/O ölçüsü, bu yüzden cyan ona düşüyor.
+   *
+   * Üç grafik alt alta duruyor ve aynı x eksenini paylaşıyor; renk burada
+   * dekorasyon değil, hangi bandın hangi ölçüye ait olduğunu söyleyen tek
+   * işaret. Üçü de aynı renkte olsaydı imleç bir grafikten diğerine geçerken
+   * kullanıcı yerini kaybederdi.
+   */
+  --color-cpu: #6366f1;
+  --color-ram: #a78bfa;
+  --color-disk: #22d3ee;
+
+  --radius-card: 0.875rem; /* tüm kartlarda AYNI yarıçap (plan §15) */
 }
 
 html,
@@ -28,4 +61,36 @@ body {
 
 body {
   -webkit-font-smoothing: antialiased;
+  /*
+   * Referans görseldeki derinlik: sol üstten inen çok soluk bir indigo hâle.
+   * Plan §1 "gereksiz gradient, glow ve dekoratif elementleri minimumda tut"
+   * diyor — bu yüzden tek bir radial, %6 opaklıkta ve sabit. Kaydırmayla
+   * hareket etmiyor, dikkat çekmiyor; yalnızca düz siyahın kartonluğunu alıyor.
+   */
+  background-image: radial-gradient(
+    900px 600px at 12% -10%,
+    color-mix(in oklab, var(--color-accent) 9%, transparent),
+    transparent 70%
+  );
+  background-attachment: fixed;
+}
+
+/*
+ * Kaydırma çubuğu: varsayılan açık gri çubuk koyu panelin üstünde parlayan bir
+ * çizgi gibi duruyor ve göz doğrudan oraya gidiyordu.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+/*
+ * Klavye ile gezinen kullanıcı nerede olduğunu görmeli. Tarayıcının varsayılan
+ * odak halkası koyu zeminde neredeyse görünmez; accent ile değiştiriliyor.
+ * :focus-visible kullanılıyor, :focus değil — fareyle tıklayana halka çıkmaz.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

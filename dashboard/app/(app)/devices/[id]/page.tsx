@@ -5,15 +5,19 @@
  *
  * Yerleşim 70/30: geniş sol panel inceleme alanı (çizelge + loglar), dar sağ
  * panel sabit bağlam ve aksiyonlar. Sağ panel kaydırmada yerinde kalır.
+ *
+ * Aralık (24 saat … 10 gün) burada DEĞİL, toolbar'da seçiliyor ve buraya
+ * kabuktan geliyor. §9.8: "zaman aralığı TEKTİR" — aynı seçim hem grafiği hem
+ * log listesini daraltıyor, dolayısıyla ikisinin ortak bir üstünde durması
+ * gerekiyordu.
  */
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useSession } from "@/lib/useSession";
+import { useApp } from "@/lib/appState";
 import { fetchDevice, type DeviceDetail } from "@/lib/devices";
-import { RANGES, type RangeKey } from "@/lib/logs";
+import { IconChevron } from "@/components/icons";
 import { DetailPanel } from "./DetailPanel";
 import { Timeline } from "./Timeline";
 import { LogList } from "./LogList";
@@ -27,31 +31,11 @@ export default function DeviceDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { status } = useSession();
-  const router = useRouter();
+  const { now, anchor, rangeSeconds } = useApp();
 
   const [device, setDevice] = useState<DeviceDetail | null>(null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  const [range, setRange] = useState<RangeKey>("24h");
-
-  /**
-   * Aralığın sabitlendiği an. Saniyede bir tikleyen `now` kullanılsaydı
-   * aralığın alt sınırı her saniye kayar, log listesi durmadan sıfırlanırdı.
-   * Yalnızca aralık değiştiğinde tazelenir.
-   */
-  const [anchor, setAnchor] = useState(() => Date.now());
-
-  const selectRange = useCallback((key: RangeKey) => {
-    setRange(key);
-    setAnchor(Date.now());
-  }, []);
-
-  useEffect(() => {
-    if (status === "signedOut") router.replace("/login");
-  }, [status, router]);
 
   const load = useCallback(async () => {
     try {
@@ -65,35 +49,25 @@ export default function DeviceDetailPage({
   }, [id]);
 
   useEffect(() => {
-    if (status !== "signedIn") return;
     load();
     const refresh = setInterval(load, REFRESH_MS);
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      clearInterval(refresh);
-      clearInterval(tick);
-    };
-  }, [status, load]);
-
-  if (status !== "signedIn") {
-    return (
-      <main className="grid min-h-screen place-items-center text-muted">
-        Yükleniyor…
-      </main>
-    );
-  }
-
-  const rangeSeconds =
-    RANGES.find((r) => r.key === range)?.seconds ?? RANGES[0].seconds;
+    return () => clearInterval(refresh);
+  }, [load]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <Link href="/devices" className="text-sm text-muted transition hover:text-fg">
-        ← Cihazlar
-      </Link>
+    <div className="mx-auto max-w-7xl">
+      <nav className="mb-5 flex items-center gap-1.5 text-sm text-muted">
+        <Link href="/devices" className="transition hover:text-fg">
+          Cihazlar
+        </Link>
+        <IconChevron className="size-3.5 text-faint" />
+        <span className="truncate text-fg">
+          {device?.device_name ?? "…"}
+        </span>
+      </nav>
 
       {error && (
-        <p className="mt-6 rounded-xl border border-danger/40 bg-panel p-4 text-sm text-danger">
+        <p className="rounded-card border border-danger/40 bg-danger/5 p-4 text-sm text-danger">
           Cihaz okunamadı: {error}
         </p>
       )}
@@ -104,22 +78,30 @@ export default function DeviceDetailPage({
         bir cihazın var olduğunu doğrulamak olurdu.
       */}
       {missing && (
-        <div className="mt-6 rounded-xl border border-line bg-panel p-8 text-center">
+        <div className="rounded-card border border-dashed border-line bg-panel/50 p-12 text-center">
           <p className="font-medium">Cihaz bulunamadı.</p>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
             Silinmiş olabilir ya da bu hesaba ait olmayabilir.
           </p>
         </div>
       )}
 
       {!device && !missing && !error && (
-        <p className="mt-6 text-sm text-muted">Yükleniyor…</p>
+        <div className="grid gap-5 lg:grid-cols-[7fr_3fr]">
+          <div className="h-96 animate-pulse rounded-card border border-line bg-panel" />
+          <div className="h-96 animate-pulse rounded-card border border-line bg-panel" />
+        </div>
       )}
 
       {device && (
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[7fr_3fr]">
-          <div className="min-w-0 space-y-6">
-            <Timeline range={range} onRangeChange={selectRange} />
+        <div className="grid items-start gap-5 lg:grid-cols-[7fr_3fr]">
+          <div className="min-w-0 space-y-5">
+            <Timeline
+              deviceId={device.id}
+              ramTotalMb={device.ram_total_mb}
+              anchor={anchor}
+              rangeSeconds={rangeSeconds}
+            />
             <LogList
               deviceId={device.id}
               rangeSeconds={rangeSeconds}
@@ -130,6 +112,6 @@ export default function DeviceDetailPage({
           <DetailPanel device={device} now={now} />
         </div>
       )}
-    </main>
+    </div>
   );
 }

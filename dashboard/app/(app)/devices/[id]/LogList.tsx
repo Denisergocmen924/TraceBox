@@ -20,12 +20,23 @@ import {
   type LogRow,
 } from "@/lib/logs";
 import { logTime } from "@/lib/time";
+import { IconList } from "@/components/icons";
 
+/**
+ * Seviye rozetleri (tasarım planı §13: "log severity seviyelerini renklerle
+ * ayır"). Renk anlamla eşleşiyor — kehribar uyarı, kırmızı hata — ve aynı
+ * anlamlar dashboard'ın her yerinde geçerli (plan §15).
+ *
+ * critical, error'dan DOLU zeminle ayrılıyor. İkisi de kırmızı olmalı, çünkü
+ * ikisi de agent'ta acil flush tetikliyor (§7); ama aralarındaki fark bir
+ * kelimeyi okumaya bırakılamayacak kadar önemli. Dolu zemin, göz satırları
+ * tararken durduran tek işaret.
+ */
 const LEVEL_STYLE: Record<LogLevel, string> = {
-  info: "text-muted",
-  warning: "text-warn",
-  error: "text-danger",
-  critical: "text-danger font-semibold",
+  info: "border-line bg-panel-2 text-muted",
+  warning: "border-warn/25 bg-warn/10 text-warn",
+  error: "border-danger/25 bg-danger/10 text-danger",
+  critical: "border-danger bg-danger text-white",
 };
 
 const FILTERS: LevelFilter[] = ["all", "warning", "error"];
@@ -145,25 +156,42 @@ export function LogList({
   }, [loadMore, finished, rows.length]);
 
   return (
-    <section className="rounded-xl border border-line bg-panel">
+    <section className="overflow-hidden rounded-card border border-line bg-panel">
       <header className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-        <h2 className="mr-auto font-medium">Loglar</h2>
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setLevel(f)}
-            className={`rounded-lg px-2.5 py-1 text-sm transition ${
-              level === f
-                ? "bg-accent text-white"
-                : "text-muted hover:text-fg"
-            }`}
-          >
-            {LEVEL_FILTER_LABEL[f]}
-          </button>
-        ))}
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+          <IconList className="size-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-medium">Loglar</h2>
+          <p className="mt-0.5 text-xs text-faint">
+            {rows.length} satır{finished ? "" : " ve devamı"} · seçili aralık
+          </p>
+        </div>
+
+        {/*
+          Süzgeç bir EŞİKTİR, tam eşleşme değil: "warning+" seçildiğinde error
+          ve critical de listede kalır (lib/logs.ts). Etiketlerdeki artı işareti
+          bunu söylüyor — "warning" yazsaydı kullanıcı, süzgecin bir error'ı
+          gizlediğini sanabilirdi.
+        */}
+        <div className="ml-auto flex shrink-0 items-center rounded-lg border border-line bg-bg-soft p-0.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setLevel(f)}
+              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+                level === f
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-fg"
+              }`}
+            >
+              {LEVEL_FILTER_LABEL[f]}
+            </button>
+          ))}
+        </div>
       </header>
 
-      <div ref={scroller} className="max-h-[28rem] overflow-y-auto">
+      <div ref={scroller} className="max-h-[32rem] overflow-y-auto">
         {error && (
           <p className="px-5 py-4 text-sm text-danger">
             Loglar okunamadı: {error}
@@ -171,27 +199,32 @@ export function LogList({
         )}
 
         {rows.length === 0 && finished && !error && (
-          <p className="px-5 py-8 text-center text-sm text-muted">
+          <p className="px-5 py-16 text-center text-sm text-muted">
             Bu aralıkta log yok.
           </p>
         )}
 
-        <ul className="divide-y divide-line/60">
+        <ul className="divide-y divide-line/50">
           {rows.map((row) => (
             <li
               key={row.id}
-              className="flex gap-3 px-5 py-2 font-mono text-xs leading-relaxed"
+              className="flex gap-3 px-5 py-2.5 text-xs leading-relaxed transition hover:bg-panel-2/50"
             >
-              <span className="shrink-0 tabular-nums text-muted">
+              <span className="w-16 shrink-0 pt-0.5 font-mono tabular-nums text-faint">
                 {logTime(row.measured_at, now)}
               </span>
-              <span className={`w-16 shrink-0 ${LEVEL_STYLE[row.level]}`}>
+              <span
+                className={`h-fit w-20 shrink-0 rounded-md border px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide ${LEVEL_STYLE[row.level]}`}
+              >
                 {row.level}
               </span>
-              <span className="w-24 shrink-0 truncate text-muted" title={row.source ?? ""}>
+              <span
+                className="w-24 shrink-0 truncate pt-0.5 font-mono text-muted"
+                title={row.source ?? ""}
+              >
                 {row.source ?? "—"}
               </span>
-              <span className="min-w-0 break-words whitespace-pre-wrap">
+              <span className="min-w-0 whitespace-pre-wrap break-words pt-0.5 font-mono">
                 {row.message}
               </span>
             </li>
@@ -202,7 +235,7 @@ export function LogList({
         <div ref={sentinel} />
 
         {loading && (
-          <p className="px-5 py-4 text-sm text-muted">Yükleniyor…</p>
+          <p className="px-5 py-4 text-xs text-faint">Yükleniyor…</p>
         )}
       </div>
     </section>

@@ -54,3 +54,23 @@ export function localDateTime(iso: string | null): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * Grafiğin x ekseni etiketi — YEREL saat, aralığın uzunluğuna göre kısalır.
+ *
+ * Saniye YOK: eksende beş etiket var ve aralarındaki mesafe dakikalarla
+ * ölçülüyor; saniye yazmak okunacak bir bilgi değil, göze giren gürültü olurdu.
+ * 36 saatten uzun aralıklarda gün de eklenir — yoksa "03:00" iki farklı güne
+ * ait iki etikette aynı görünürdü.
+ */
+export function axisTime(ms: number, spanMs: number): string {
+  const d = new Date(ms);
+  const clock = d.toLocaleTimeString("tr-TR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  if (spanMs <= 36 * 3600 * 1000) return clock;
+  const day = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" });
+  return `${day} ${clock}`;
+}
