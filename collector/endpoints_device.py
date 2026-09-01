@@ -78,12 +78,12 @@ async def post_devices(payload: DeviceCreateIn, user: AuthenticatedUser) -> dict
         if error.code == UNIQUE_VIOLATION:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Bu hesapta aynı adı taşıyan bir cihaz zaten var.",
+                detail="A host with this name already exists in this account.",
             ) from error
 
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Cihaz şu an oluşturulamıyor.",
+            detail="The host could not be created right now.",
         ) from error
 
     # `device_key` yalnızca bu yanıtta görünür. Kaybedilirse geri getirilemez;

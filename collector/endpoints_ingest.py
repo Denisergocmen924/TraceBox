@@ -254,7 +254,7 @@ def _external_ip(header_value: str | None, enabled_addons: list[str]) -> str | N
         return str(ip_address(header_value.strip()))
     except ValueError:
         # Değerin kendisi loglanmaz: doğrulanmamış, dışarıdan gelen bir metin.
-        logger.warning("%s başlığı IP adresi olarak çözülemedi", CLIENT_IP_HEADER)
+        logger.warning("could not parse the %s header as an IP address", CLIENT_IP_HEADER)
         return None
 
 
