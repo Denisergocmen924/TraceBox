@@ -164,7 +164,7 @@ def test_a_failed_poll_does_not_stop_the_agent(store, spool, capsys):
     stopped = poll(FakePoller(CommandError("bağlanılamadı")), state, store, spool, FakeShipper())
 
     assert stopped is False
-    assert "komutlar alınamadı" in capsys.readouterr().out
+    assert "could not fetch commands" in capsys.readouterr().out
 
 
 def test_an_empty_queue_costs_nothing(store, spool):

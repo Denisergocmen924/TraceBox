@@ -61,11 +61,36 @@ _PRIORITY_LEVELS = {
 # ama systemd altında koşmayan süreçlerde boştur.
 _SOURCE_FIELDS = ("_SYSTEMD_UNIT", "SYSLOG_IDENTIFIER", "_COMM")
 
+# Agent'ın KENDİ journald kimliği. Unit adı systemd altında, identifier ise
+# servis dışında (geliştirme, elle çalıştırma) dolar; ikisi birden bakılıyor.
+_SELF_UNIT = "tracebox-agent.service"
+_SELF_IDENTIFIER = "tracebox-agent"
+
+# Agent'ın KENDİ loglarından buluta gönderilen en düşük öncelik (4 = warning).
+#
+# Sorun bir geri besleme döngüsüydü: agent ekrana yazıyor → systemd journald'a
+# koyuyor → agent journald'ı okuyup kendi satırlarını buluta geri gönderiyor.
+# Her tur en az bir satır ürettiği için günde ~26.000 satır — tek bir cihaz
+# için, hiçbiri o cihaz hakkında değil. Kullanıcının 10 günlük penceresini
+# agent'ın kendi gevezeliği dolduruyordu.
+#
+# Tamamen susturmak yanlış olurdu: "collector'a ulaşılamadı" cümlesi
+# kullanıcının görmesi gereken bir şey ve onu başka hiçbir yerde göremez.
+# Ayrım SEVİYEDE yapılıyor — rutin tur bilgisi ("6 metrik gönderildi") info,
+# arıza warning ve üstü. Hacim kayboluyor, teşhis kalıyor.
+#
+# Not: agent'ın kendi error satırı hâlâ acil gönderim tetikleyebilir (§7).
+# Bu bilerek böyle: tetikleme `flush_cooldown_seconds` ile zaten sınırlı ve
+# gönderim aralığıyla (10 sn) aynı mertebede, yani ölçülebilir bir maliyet
+# eklemiyor. Buna karşılık gerçek bir arızada veriyi biraz daha erken dışarı
+# taşıyor.
+_SELF_MIN_PRIORITY = 4
+
 # Cursor geçersizleştiğinde kaydın kendisine düşülen not. Atlanan aralık
 # sessizce kaybolmaz; dashboard'daki zaman çizelgesinde görünür.
 _GAP_MESSAGE = (
-    "journald cursor'ı geçersiz (journal döndü veya silindi) — "
-    "bu ana kadarki loglar okunamadı, okuma şimdiden devam ediyor"
+    "journald cursor is no longer valid (the journal rotated or was cleared) — "
+    "logs up to this point could not be read; reading resumes from now"
 )
 _GAP_SOURCE = "tracebox-agent"
 
@@ -148,11 +173,11 @@ class JournaldSource(LogSource):
                 check=False,
             )
         except FileNotFoundError as error:
-            raise JournalError("journalctl bulunamadı — sistemde journald yok") from error
+            raise JournalError("journalctl not found — this system has no journald") from error
         except subprocess.TimeoutExpired as error:
-            raise JournalError(f"journalctl {READ_TIMEOUT_SECONDS:.0f}s içinde yanıt vermedi") from error
+            raise JournalError(f"journalctl did not respond within {READ_TIMEOUT_SECONDS:.0f}s") from error
         except OSError as error:
-            raise JournalError(f"journalctl çalıştırılamadı ({error.__class__.__name__})") from error
+            raise JournalError(f"could not run journalctl ({error.__class__.__name__})") from error
 
 
 def _parse(stdout: str) -> list[dict]:
@@ -177,7 +202,15 @@ def _parse(stdout: str) -> list[dict]:
 
 
 def _to_record(entry: dict) -> LogRecord | None:
-    """journald girdisini LogRecord'a indirger. Metinsiz girdi atlanır."""
+    """journald girdisini LogRecord'a indirger.
+
+    İki girdi atlanır ve None döner: metinsiz olanlar ve agent'ın kendi
+    rutin (info) satırları. Atlanan girdi de cursor'ı ilerletir — çağıran
+    yer imini kaydın kendisinden değil, girdiden okuyor.
+    """
+    if _is_self_chatter(entry):
+        return None
+
     message = _message_text(entry.get("MESSAGE"))
     if not message.strip():
         return None
@@ -188,6 +221,28 @@ def _to_record(entry: dict) -> LogRecord | None:
         message=message,
         source=_source(entry),
     )
+
+
+def _is_self_chatter(entry: dict) -> bool:
+    """Girdi, agent'ın kendi rutin (info) satırı mı?
+
+    Ölçüt İKİ parçalı: kaynak agent olacak VE önceliği warning'in altında
+    kalacak. Yalnızca kaynağa baksaydık agent'ın arıza mesajları da yok
+    olurdu; yalnızca seviyeye baksaydık makinedeki bütün info logları
+    gitmiş olurdu — oysa asıl toplamak istediğimiz şey onlar.
+    """
+    if entry.get("_SYSTEMD_UNIT") != _SELF_UNIT and (
+        entry.get("SYSLOG_IDENTIFIER") != _SELF_IDENTIFIER
+    ):
+        return False
+
+    priority = entry.get("PRIORITY")
+    try:
+        # journald PRIORITY'yi metin olarak verir ("6"). Okunamayan bir değeri
+        # "önemli" saymak güvenli taraf: şüphede kalan kayıt gönderilir.
+        return int(priority) > _SELF_MIN_PRIORITY
+    except (TypeError, ValueError):
+        return False
 
 
 def _message_text(value: object) -> str:
@@ -259,4 +314,4 @@ def _gap_record() -> LogRecord:
 def _stderr_summary(result: subprocess.CompletedProcess) -> str:
     """journalctl'in hata satırı — logda görünecek kadar kısa."""
     detail = (result.stderr or "").strip().splitlines()
-    return detail[0][:200] if detail else f"çıkış kodu {result.returncode}"
+    return detail[0][:200] if detail else f"exit code {result.returncode}"

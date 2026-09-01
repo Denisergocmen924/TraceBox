@@ -46,7 +46,7 @@ def test_a_deleted_device_does_not_start_the_loop(tmp_path, monkeypatch, capsys)
     exit_code = entrypoint.main([])
 
     assert started == [], "silinmiş cihazda döngü başlatıldı"
-    assert "silindi" in capsys.readouterr().out
+    assert "deleted" in capsys.readouterr().out
 
 
 def test_a_deleted_device_exits_without_asking_for_a_restart(tmp_path, monkeypatch, capsys):

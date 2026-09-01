@@ -121,7 +121,7 @@ def test_connection_failure_leaves_every_record_in_the_spool(spool):
 
     assert result.ok is False
     assert spool.count() == 3
-    assert "bağlanılamadı" in result.detail
+    assert "could not connect" in result.detail
 
 
 def test_rejected_key_leaves_every_record_in_the_spool(spool):

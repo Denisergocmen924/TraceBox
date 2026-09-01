@@ -63,22 +63,22 @@ add_rollback() { ROLLBACK+=("$1"); }
 run_rollback() {
   (( ROLLBACK_ENABLED )) || return 0
   (( ${#ROLLBACK[@]} )) || return 0
-  printf '\n    yarım kalan kurulum geri alınıyor...\n' >&2
+  printf '\n    rolling back the unfinished installation...\n' >&2
   local i
   for (( i = ${#ROLLBACK[@]} - 1; i >= 0; i-- )); do
     eval "${ROLLBACK[i]}" >/dev/null 2>&1 || true
   done
-  printf '    sistem kurulum öncesi haline döndürüldü.\n' >&2
+  printf '    the system is back to its pre-install state.\n' >&2
 }
 
 fail() {
   printf '\n✗ %s\n' "$*" >&2
   run_rollback
-  (( ROLLBACK_ENABLED )) || printf '\n  Yapılandırma korundu. Kaldırmak için: sudo %s/uninstall.sh\n' "${INSTALL_DIR}" >&2
+  (( ROLLBACK_ENABLED )) || printf '\n  The configuration was kept. To remove it: sudo %s/uninstall.sh\n' "${INSTALL_DIR}" >&2
   exit 1
 }
 
-on_error() { fail "Kurulum ${1} numaralı satırda başarısız oldu."; }
+on_error() { fail "Installation failed on line ${1}."; }
 trap 'on_error ${LINENO}' ERR
 
 # İndirme için açılan geçici dizin her durumda silinir.
@@ -103,16 +103,16 @@ prompt_secret() {
     # -s: yazılan karakterler ekranda görünmez (omuz üstünden okunmasın).
     read -r -s value < "${TTY_DEVICE}"
     printf '\n' > "${TTY_DEVICE}"
-    [[ -n "${value}" ]] || printf '    boş olamaz, tekrar deneyin\n' > "${TTY_DEVICE}"
+    [[ -n "${value}" ]] || printf '    cannot be empty, try again\n' > "${TTY_DEVICE}"
   done
   printf '%s' "${value}"
 }
 
 ask_yes_no() {
   local answer=""
-  printf '    %s [e/H] ' "$1" > "${TTY_DEVICE}"
+  printf '    %s [y/N] ' "$1" > "${TTY_DEVICE}"
   read -r answer < "${TTY_DEVICE}"
-  [[ "${answer}" == "e" || "${answer}" == "E" ]]
+  [[ "${answer}" == "y" || "${answer}" == "Y" ]]
 }
 
 run_as_service_user() {
@@ -123,51 +123,51 @@ run_as_service_user() {
   fi
 }
 
-printf '\nTraceBox Agent kurulumu\n'
+printf '\nTraceBox Agent installer\n'
 
 # ===========================================================================
 # 1/7  Ön kontrol — eksik bir şey varsa HİÇBİR ŞEY oluşturmadan dur.
 # ===========================================================================
-step "1/7  Ön kontrol"
+step "1/7  Preflight checks"
 
-[[ ${EUID} -eq 0 ]] || fail "root yetkisi gerekli. Şöyle çalıştırın: sudo bash install.sh"
-[[ "$(uname -s)" == "Linux" ]] || fail "TraceBox Agent yalnızca Linux'ta çalışır (bulunan: $(uname -s))."
+[[ ${EUID} -eq 0 ]] || fail "Root privileges are required. Run it like this: sudo bash install.sh"
+[[ "$(uname -s)" == "Linux" ]] || fail "TraceBox Agent runs on Linux only (found: $(uname -s))."
 
 # systemd'nin init olarak çalıştığının standart göstergesi bu dizindir.
-[[ -d /run/systemd/system ]] || fail "systemd bulunamadı; agent bir systemd servisi olarak çalışır."
-have systemctl || fail "systemctl bulunamadı."
-have journalctl || fail "journalctl bulunamadı; agent sistem loglarını journald'dan okur."
-have useradd || fail "useradd bulunamadı; yetkisiz servis kullanıcısı oluşturulamaz."
-have tar || fail "tar bulunamadı; kaynak arşivi açılamaz."
-[[ -e "${TTY_DEVICE}" ]] || fail "Terminal erişimi yok. Cihaz anahtarı sorularak alınır; betiği bir terminalden çalıştırın."
+[[ -d /run/systemd/system ]] || fail "systemd not found; the agent runs as a systemd service."
+have systemctl || fail "systemctl not found."
+have journalctl || fail "journalctl not found; the agent reads system logs from journald."
+have useradd || fail "useradd not found; the unprivileged service user cannot be created."
+have tar || fail "tar not found; the source archive cannot be extracted."
+[[ -e "${TTY_DEVICE}" ]] || fail "No terminal access. The device key is asked for interactively; run the script from a terminal."
 
 if have curl; then
   DOWNLOADER="curl"
 elif have wget; then
   DOWNLOADER="wget"
 else
-  fail "curl veya wget gerekli; agent kaynağı indirilemez."
+  fail "curl or wget is required; the agent source cannot be downloaded."
 fi
 
-have python3 || fail "python3 bulunamadı; en az 3.11 gerekli."
+have python3 || fail "python3 not found; 3.11 or newer is required."
 python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' \
-  || fail "python3 sürümü çok eski ($(python3 -V 2>&1)); en az 3.11 gerekli."
+  || fail "This python3 is too old ($(python3 -V 2>&1)); 3.11 or newer is required."
 
 # venv ve ensurepip Debian/Ubuntu'da ayrı bir pakettedir; eksikse izole ortam
 # kurulamaz ve bu ancak 4. adımda patlardı.
 python3 -c 'import venv, ensurepip' >/dev/null 2>&1 \
-  || fail "python3 venv modülü eksik. Debian/Ubuntu'da: sudo apt install python3-venv"
+  || fail "The python3 venv module is missing. On Debian/Ubuntu: sudo apt install python3-venv"
 
 if [[ -d "${INSTALL_DIR}" || -e "${UNIT_PATH}" ]]; then
-  say "mevcut kurulum bulundu — kod ve servis yenilenecek"
+  say "existing installation found — the code and the service will be refreshed"
 fi
 
-say "ortam uygun ($(python3 -V 2>&1), ${DOWNLOADER})"
+say "environment is suitable ($(python3 -V 2>&1), ${DOWNLOADER})"
 
 # ===========================================================================
 # 2/7  Kaynak — betik tek başına indirildiği için agent kodunu kendisi çeker.
 # ===========================================================================
-step "2/7  Agent kaynağı indiriliyor"
+step "2/7  Downloading the agent source"
 
 WORK_DIR="$(mktemp -d)"
 TARBALL="${WORK_DIR}/source.tar.gz"
@@ -178,18 +178,18 @@ case "${DOWNLOADER}" in
   curl)
     # --proto '=https': yönlendirme düz HTTP'ye düşerse indirme reddedilir.
     curl -fsSL --proto '=https' --tlsv1.2 -o "${TARBALL}" "${SOURCE_URL}" \
-      || fail "Kaynak indirilemedi: ${SOURCE_URL}"
+      || fail "Could not download the source: ${SOURCE_URL}"
     ;;
   wget)
     wget -q --https-only -O "${TARBALL}" "${SOURCE_URL}" \
-      || fail "Kaynak indirilemedi: ${SOURCE_URL}"
+      || fail "Could not download the source: ${SOURCE_URL}"
     ;;
 esac
 
 mkdir -p "${SOURCE_ROOT}"
 # --strip-components=1: arşivin en üstündeki "TraceBox-master/" sarmalı atılır.
 tar -xzf "${TARBALL}" -C "${SOURCE_ROOT}" --strip-components=1 \
-  || fail "Kaynak arşivi açılamadı."
+  || fail "Could not extract the source archive."
 
 SOURCE_AGENT="${SOURCE_ROOT}/agent"
 for required in \
@@ -197,18 +197,18 @@ for required in \
   "tracebox-agent.service" "tracebox-uninstall.service" "tracebox-uninstall.path"
 do
   [[ -f "${SOURCE_AGENT}/${required}" ]] \
-    || fail "İndirilen arşiv eksik: agent/${required} yok."
+    || fail "The downloaded archive is incomplete: agent/${required} is missing."
 done
 
-say "indirildi ve açıldı"
+say "downloaded and extracted"
 
 # ===========================================================================
 # 3/7  Kullanıcı, dizinler ve kodun yerleştirilmesi
 # ===========================================================================
-step "3/7  Kullanıcı ve dizinler"
+step "3/7  User and directories"
 
 if id "${SERVICE_USER}" >/dev/null 2>&1; then
-  say "kullanıcı zaten var: ${SERVICE_USER}"
+  say "user already exists: ${SERVICE_USER}"
 else
   NOLOGIN_SHELL="$(command -v nologin || true)"
   [[ -n "${NOLOGIN_SHELL}" ]] || NOLOGIN_SHELL="/bin/false"
@@ -216,22 +216,22 @@ else
   # ev dizini yok. Bu hesapla oturum açılamaz, yalnızca servis çalışır.
   useradd --system --no-create-home --shell "${NOLOGIN_SHELL}" "${SERVICE_USER}"
   add_rollback "userdel ${SERVICE_USER}"
-  say "yetkisiz kullanıcı oluşturuldu: ${SERVICE_USER}"
+  say "unprivileged user created: ${SERVICE_USER}"
 fi
 
 # journald'ı okuyabilmek için gereken TEK ek yetki. root değil, grup üyeliği.
 if getent group systemd-journal >/dev/null 2>&1; then
   usermod -aG systemd-journal "${SERVICE_USER}"
-  say "systemd-journal grubuna eklendi (log okuma izni)"
+  say "added to the systemd-journal group (log read permission)"
 else
-  warn "systemd-journal grubu yok; agent yalnızca kendi loglarını görebilir"
+  warn "no systemd-journal group; the agent can only see its own logs"
 fi
 
 for dir in "${INSTALL_DIR}" "${CONFIG_DIR}" "${STATE_DIR}"; do
   if [[ ! -d "${dir}" ]]; then
     mkdir -p "${dir}"
     add_rollback "rm -rf ${dir}"
-    say "oluşturuldu: ${dir}"
+    say "created: ${dir}"
   fi
 done
 
@@ -240,7 +240,7 @@ done
 # kendini kaldırır.
 if [[ -e "${DELETED_MARKER}" ]]; then
   rm -f "${DELETED_MARKER}"
-  say "önceki kurulumdan kalan kaldırma işareti silindi"
+  say "removal marker left from a previous installation deleted"
 fi
 
 # Kod her kurulumda sıfırdan kopyalanır: eski sürümden kalan bir dosya
@@ -254,23 +254,23 @@ rm -f "${INSTALL_DIR}/agent/install.sh" "${INSTALL_DIR}/agent/uninstall.sh"
 # Kaldırma betiği bilinen bir yere konur: kullanıcı elle çalıştırabilsin.
 if [[ -f "${SOURCE_AGENT}/uninstall.sh" ]]; then
   install -m 755 "${SOURCE_AGENT}/uninstall.sh" "${INSTALL_DIR}/uninstall.sh"
-  say "kaldırma betiği: ${INSTALL_DIR}/uninstall.sh"
+  say "uninstall script: ${INSTALL_DIR}/uninstall.sh"
 fi
 
-say "kod yerleştirildi: ${INSTALL_DIR}/agent"
+say "code installed: ${INSTALL_DIR}/agent"
 
 # ===========================================================================
 # 4/7  İzole Python ortamı — sistem Python'ına hiç dokunulmaz.
 # ===========================================================================
-step "4/7  İzole Python ortamı"
+step "4/7  Isolated Python environment"
 
 rm -rf "${VENV_DIR}"
-python3 -m venv "${VENV_DIR}" || fail "Sanal ortam oluşturulamadı: ${VENV_DIR}"
+python3 -m venv "${VENV_DIR}" || fail "Could not create the virtual environment: ${VENV_DIR}"
 
 "${VENV_DIR}/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 \
-  || warn "pip güncellenemedi; mevcut sürümle devam ediliyor"
+  || warn "could not upgrade pip; continuing with the current version"
 "${VENV_DIR}/bin/pip" install --quiet -r "${INSTALL_DIR}/agent/requirements.txt" \
-  || fail "Bağımlılıklar kurulamadı (ağ erişimi var mı?)."
+  || fail "Could not install the dependencies (is there network access?)."
 
 # Bytecode şimdi, root iken üretilir: /opt/tracebox agent'a salt-okunur olduğu
 # için servis her açılışta yeniden derlemeye çalışıp başarısız olmasın.
@@ -288,28 +288,28 @@ chmod 750 "${STATE_DIR}"
 chown root:"${SERVICE_USER}" "${CONFIG_DIR}"
 chmod 750 "${CONFIG_DIR}"
 
-say "psutil + httpx kuruldu (sistem Python'ı değişmedi)"
+say "psutil + httpx installed (the system Python was left untouched)"
 
 # ===========================================================================
 # 5/7  Yapılandırma — cihaz anahtarı burada sorulur.
 # ===========================================================================
-step "5/7  Yapılandırma"
+step "5/7  Configuration"
 
 WRITE_CONFIG=1
 if [[ -f "${CONFIG_FILE}" ]]; then
-  say "mevcut yapılandırma bulundu: ${CONFIG_FILE}"
-  if ask_yes_no "Korunsun mu? (hayır derseniz cihaz anahtarı yeniden sorulur)"; then
+  say "existing configuration found: ${CONFIG_FILE}"
+  if ask_yes_no "Keep it? (answering no asks for the device key again)"; then
     WRITE_CONFIG=0
-    say "mevcut yapılandırma korundu"
+    say "existing configuration kept"
   fi
 fi
 
 if (( WRITE_CONFIG )); then
-  COLLECTOR_URL="$(prompt_default "Collector adresi" "${DEFAULT_COLLECTOR_URL}")"
-  DEVICE_KEY="$(prompt_secret "Cihaz anahtarı (dashboard'da bir kez gösterilir)")"
+  COLLECTOR_URL="$(prompt_default "Collector address" "${DEFAULT_COLLECTOR_URL}")"
+  DEVICE_KEY="$(prompt_secret "Device key (shown once in the dashboard)")"
 
   [[ "${DEVICE_KEY}" == "${KEY_PREFIX}"* ]] \
-    || warn "anahtar '${KEY_PREFIX}' ile başlamıyor — doğru değeri yapıştırdığınızdan emin olun"
+    || warn "the key does not start with '${KEY_PREFIX}' — make sure you pasted the right value"
 
   # Dosya İÇERİK yazılmadan önce kilitlenir: anahtar bir an bile başkalarının
   # okuyabileceği bir dosyada durmasın.
@@ -318,22 +318,22 @@ if (( WRITE_CONFIG )); then
   chmod 600 "${CONFIG_FILE}"
 
   cat > "${CONFIG_FILE}" <<TOML
-# TraceBox Agent yapılandırması — install.sh tarafından oluşturuldu.
-# Agent bu dosyayı yalnızca okur ve her tick'te yeniden okur: değişiklikler
-# servisi yeniden başlatmadan geçerli olur.
-# Tüm seçeneklerin açıklaması: ${INSTALL_DIR}/agent/config.example.toml
+# TraceBox Agent configuration — generated by install.sh.
+# The agent only reads this file, and re-reads it on every tick: changes take
+# effect without restarting the service.
+# Every option is documented in: ${INSTALL_DIR}/agent/config.example.toml
 
 collector_url = "${COLLECTOR_URL}"
 device_key    = "${DEVICE_KEY}"
 
 collect_interval_seconds = 5
-send_interval_seconds    = 30
+send_interval_seconds    = 10
 command_poll_seconds     = 10
 
 flush_cpu_threshold    = 90
 flush_ram_threshold    = 90
 flush_disk_threshold   = 95
-flush_cooldown_seconds = 20
+flush_cooldown_seconds = 10
 
 spool_max_age_days = 10
 spool_max_size_mb  = 200
@@ -341,7 +341,7 @@ spool_max_size_mb  = 200
 enabled_addons = []
 TOML
 
-  say "yazıldı: ${CONFIG_FILE} (sahip ${SERVICE_USER}, izin 600)"
+  say "written: ${CONFIG_FILE} (owner ${SERVICE_USER}, mode 600)"
 fi
 
 # Bu noktadan sonra geri alma KAPATILIR. config.toml silinirse cihaz anahtarı
@@ -353,7 +353,7 @@ ROLLBACK_ENABLED=0
 # ===========================================================================
 # 6/7  systemd servisi
 # ===========================================================================
-step "6/7  systemd servisi"
+step "6/7  systemd service"
 
 install -m 644 "${INSTALL_DIR}/agent/tracebox-agent.service" "${UNIT_PATH}"
 install -m 644 "${INSTALL_DIR}/agent/${UNINSTALL_SERVICE}" "${UNINSTALL_SERVICE_PATH}"
@@ -362,27 +362,27 @@ systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1
 systemctl restart "${SERVICE_NAME}"
 
-say "kuruldu ve başlatıldı: ${SERVICE_NAME}"
+say "installed and started: ${SERVICE_NAME}"
 
 # İzleyici şimdi başlar ve kaldırma işaretini beklemeye koyulur. `enable --now`
 # olmadan yalnızca bir sonraki açılışta devreye girerdi: bu makinede verilen
 # ilk `delete` komutu, makine yeniden başlatılana kadar tamamlanmazdı.
 systemctl enable --now "${UNINSTALL_PATH_UNIT}" >/dev/null 2>&1 \
-  || warn "${UNINSTALL_PATH_UNIT} etkinleştirilemedi; delete komutu geldiğinde kaldırma elle yapılmalı"
-say "kaldırma izleyicisi etkin: ${UNINSTALL_PATH_UNIT} (delete komutunun root tarafı)"
+  || warn "could not enable ${UNINSTALL_PATH_UNIT}; a delete command would then need manual removal"
+say "removal watcher enabled: ${UNINSTALL_PATH_UNIT} (the root side of the delete command)"
 
 # Servisin ilk saniyede düşüp düşmediğini görmek için kısa bir bekleme.
 sleep 2
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
-  say "servis çalışıyor"
+  say "service is running"
 else
-  warn "servis ayağa kalkmadı — ayrıntı: journalctl -u ${SERVICE_NAME} -n 30 --no-pager"
+  warn "the service did not come up — details: journalctl -u ${SERVICE_NAME} -n 30 --no-pager"
 fi
 
 # ===========================================================================
 # 7/7  Bağlantı testi — GET /verify
 # ===========================================================================
-step "7/7  Bağlantı testi"
+step "7/7  Connection test"
 
 # Test, servisin çalıştığı kullanıcıyla yapılır: config'i okuyabildiği de
 # böylece doğrulanmış olur.
@@ -392,15 +392,15 @@ VERIFY_OK=1
 
 printf '\n'
 if (( VERIFY_OK )); then
-  printf '✓ TraceBox Agent kuruldu ve collector ile konuşuyor.\n\n'
+  printf '✓ TraceBox Agent is installed and talking to the collector.\n\n'
 else
-  printf '! TraceBox Agent kuruldu ama bağlantı testi başarısız.\n'
-  printf '  Yapılandırmayı düzeltip tekrar deneyin:\n'
+  printf '! TraceBox Agent is installed but the connection test failed.\n'
+  printf '  Fix the configuration and try again:\n'
   printf '    sudo nano %s\n' "${CONFIG_FILE}"
-  printf '    sudo -u %s %s/bin/python -m agent --verify   (%s içinden)\n\n' \
+  printf '    sudo -u %s %s/bin/python -m agent --verify   (from inside %s)\n\n' \
     "${SERVICE_USER}" "${VENV_DIR}" "${INSTALL_DIR}"
 fi
 
-printf '  Durum   : systemctl status %s\n' "${SERVICE_NAME}"
-printf '  Loglar  : journalctl -u %s -f\n' "${SERVICE_NAME}"
-printf '  Kaldırma: sudo %s/uninstall.sh\n\n' "${INSTALL_DIR}"
+printf '  Status   : systemctl status %s\n' "${SERVICE_NAME}"
+printf '  Logs     : journalctl -u %s -f\n' "${SERVICE_NAME}"
+printf '  Uninstall: sudo %s/uninstall.sh\n\n' "${INSTALL_DIR}"

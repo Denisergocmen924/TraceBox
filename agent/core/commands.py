@@ -82,10 +82,10 @@ class CommandPoller:
         try:
             response = self._client.get(url, headers=headers)
         except httpx.HTTPError as error:
-            raise CommandError(f"bağlanılamadı ({error.__class__.__name__})") from error
+            raise CommandError(f"could not connect ({error.__class__.__name__})") from error
 
         if response.status_code == 401:
-            raise CommandError("cihaz anahtarı reddedildi (401)")
+            raise CommandError("device key rejected (401)")
 
         if response.status_code != 200:
             raise CommandError(f"HTTP {response.status_code}")
@@ -93,7 +93,7 @@ class CommandPoller:
         try:
             body = response.json()
         except ValueError as error:
-            raise CommandError("yanıt JSON değil") from error
+            raise CommandError("response is not JSON") from error
 
         return _parse(body)
 
@@ -108,7 +108,7 @@ def _parse(body) -> list[Command]:
     komut yüzünden diğerlerini (özellikle `resume`u) kaybetmek daha kötüdür.
     """
     if not isinstance(body, dict) or not isinstance(body.get("commands"), list):
-        raise CommandError("yanıt beklenen şekilde değil")
+        raise CommandError("response has an unexpected shape")
 
     commands = []
     for item in body["commands"]:
@@ -144,11 +144,11 @@ def apply_commands(commands, *, config, state, store, spool, shipper, log) -> Co
             if state.logging_enabled != wanted:
                 state.logging_enabled = wanted
                 state_changed = True
-                log(f"[cmd] {command.type} uygulandı — logging_enabled={wanted}")
+                log(f"[cmd] {command.type} applied — logging_enabled={wanted}")
             else:
                 # Ack henüz ulaşmadığı için tekrar gönderilmiş komut. Uygulama
                 # idempotent: durum zaten istenen değerde.
-                log(f"[cmd] {command.type} zaten uygulanmış — ack tekrar denenecek")
+                log(f"[cmd] {command.type} was already applied — retrying the ack")
 
             # Zaten ack listesinde olsa bile buraya yazılır: komutun tekrar
             # gelmesi ack'in ulaşmadığı anlamına gelir, yani tekrar denenmeli.
@@ -160,7 +160,7 @@ def apply_commands(commands, *, config, state, store, spool, shipper, log) -> Co
         # sayar ve bir daha vermezdi; yani agent'ın anlamadığı bir talimat
         # sessizce uygulanmış görünürdü. Ack edilmeyince komut kuyrukta kalır
         # ve agent güncellendiğinde uygulanır.
-        log(f"[cmd] bilinmeyen komut türü '{command.type}' — yok sayıldı (ack edilmedi)")
+        log(f"[cmd] unknown command type '{command.type}' — ignored (not acked)")
 
     return CommandResult(applied_ids=applied, state_changed=state_changed)
 
@@ -186,10 +186,10 @@ def ack_now(applied_ids: list[str], *, config, shipper, log) -> list[str]:
 
     result = shipper.send_acks(config, applied_ids)
     if not result.ok:
-        log(f"[cmd] ack gönderilemedi: {result.detail} — sonraki gönderime bırakıldı")
+        log(f"[cmd] could not send ack: {result.detail} — deferred to the next ship")
         return []
 
-    log(f"[cmd] {len(applied_ids)} komut ack'lendi")
+    log(f"[cmd] acked {len(applied_ids)} command(s)")
     return list(applied_ids)
 
 
@@ -205,20 +205,20 @@ def _delete(command, *, config, store, spool, shipper, log) -> bool:
     ve ack hiç atılamazdı; sunucu satırı erken silinseydi agent 401 alır,
     komutu hiç göremezdi.
     """
-    log("[cmd] delete alındı — önce ack gönderiliyor.")
+    log("[cmd] delete received — sending the ack first.")
 
     result = shipper.send_acks(config, [command.id])
     if not result.ok:
-        log(f"[cmd] delete ack gönderilemedi: {result.detail} — silme ertelendi.")
+        log(f"[cmd] could not send delete ack: {result.detail} — deletion postponed.")
         return False
 
-    log("[cmd] ack onaylandı: cihaz kaydı sunucudan silindi. Yerel temizlik başlıyor.")
+    log("[cmd] ack confirmed: the host record was deleted on the server. Wiping locally.")
 
     spool.wipe()
-    log(f"[cmd] spool silindi: {spool.path}")
+    log(f"[cmd] spool wiped: {spool.path}")
 
     store.wipe()
-    log(f"[cmd] state silindi: {store.path}")
+    log(f"[cmd] state wiped: {store.path}")
 
     # Kalanı (systemd servisi, /opt, /etc ve anahtarın kendisi) agent SİLEMEZ:
     # yetkisiz `tracebox` kullanıcısıyla, NoNewPrivileges=yes ve
@@ -229,7 +229,7 @@ def _delete(command, *, config, store, spool, shipper, log) -> bool:
     # tracebox-uninstall.path onu görür ve uninstall.sh'i çalıştırır. Böylece
     # kaldırma, agent'ın yetkisini artırmadan tamamlanır.
     marker = store.mark_deleted()
-    log(f"[cmd] kaldırma işareti bırakıldı: {marker}")
-    log("[cmd] kaldırma tamamlanmazsa elle: sudo /opt/tracebox/uninstall.sh --yes")
+    log(f"[cmd] uninstall marker written: {marker}")
+    log("[cmd] if the removal does not finish: sudo /opt/tracebox/uninstall.sh --yes")
 
     return True

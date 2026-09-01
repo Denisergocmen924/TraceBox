@@ -68,7 +68,7 @@ def _install_stop_signal() -> threading.Event:
     stop = threading.Event()
 
     def handle(signum, _frame) -> None:
-        _log(f"[signal] {signal.Signals(signum).name} alındı, döngü kapanıyor.")
+        _log(f"[signal] {signal.Signals(signum).name} received, shutting down the loop.")
         stop.set()
 
     signal.signal(signal.SIGTERM, handle)
@@ -99,23 +99,23 @@ def _startup_inventory(config: Config, state: State) -> Inventory | None:
     """
     current = inventory_module.collect_inventory(config)
     _log(
-        f"[start] envanter: {current.os_name} {current.os_version} · "
+        f"[start] inventory: {current.os_name} {current.os_version} · "
         f"{current.cpu_model} · "
-        f"{current.cpu_cores_physical}/{current.cpu_cores_logical} çekirdek · "
+        f"{current.cpu_cores_physical}/{current.cpu_cores_logical} cores · "
         f"{current.ram_total_mb}MB RAM · {current.disk_total_mb}MB disk · "
         f"kernel {current.kernel_version} ({current.arch})"
     )
-    _log(f"[start] açılış zamanı: {current.last_boot}")
+    _log(f"[start] booted at: {current.last_boot}")
 
     changed = inventory_module.changed_fields(current, state.known_inventory)
     if not changed:
-        _log("[start] envanter değişmemiş — gönderim gerekmiyor.")
+        _log("[start] inventory unchanged — nothing to send.")
         return None
 
-    reason = "ilk kez okundu" if not state.known_inventory else "değişti"
+    reason = "read for the first time" if not state.known_inventory else "changed"
     _log(
-        f"[start] envanter {reason}: {len(changed)} alan "
-        f"({', '.join(sorted(changed))}) — gönderilecek"
+        f"[start] inventory {reason}: {len(changed)} field(s) "
+        f"({', '.join(sorted(changed))}) — will be sent"
     )
     return current
 
@@ -182,7 +182,7 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
     except LogSourceError as error:
         # Log kaynağı erişilemez diye metrik toplama ve gönderim durmaz;
         # tur log'suz sürer, sorun bir sonraki turda yeniden denenir.
-        _log(f"[logs] okunamadı: {error}")
+        _log(f"[logs] could not read: {error}")
         return 0
 
     for record in records:
@@ -193,7 +193,7 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
         store.save(state)
 
     if records:
-        _log(f"[logs] {len(records)} kayıt ({_level_summary(records)})")
+        _log(f"[logs] {len(records)} record(s) ({_level_summary(records)})")
 
     return sum(1 for record in records if record.level in URGENT_LEVELS)
 
@@ -232,7 +232,7 @@ def _poll_commands(
     except CommandError as error:
         # Komut alınamaması toplamayı ve gönderimi durdurmaz; tur komutsuz
         # geçer, sorun bir sonraki poll'da yeniden denenir.
-        _log(f"[poll] komutlar alınamadı: {error}")
+        _log(f"[poll] could not fetch commands: {error}")
         return False
 
     if not commands:
@@ -276,12 +276,12 @@ def _send_inventory(
     """Envanteri gönderir; 200 alınırsa state'e işler ve None döndürür."""
     result = shipper.send_inventory(config, pending.as_dict())
     if not result.ok:
-        _log(f"[send] envanter gönderilemedi: {result.detail}")
+        _log(f"[send] could not send inventory: {result.detail}")
         return pending
 
     state.known_inventory = pending.as_dict()
     store.save(state)
-    _log("[send] envanter gönderildi.")
+    _log("[send] inventory sent.")
     return None
 
 
@@ -297,8 +297,8 @@ def _send_spool(
 
     if not result.ok:
         _log(
-            f"[send] gönderilemedi: {result.detail} — {spool.count()} kayıt bekliyor, "
-            f"{shipper.backoff_seconds:.0f} sn sonra tekrar denenecek."
+            f"[send] failed: {result.detail} — {spool.count()} record(s) waiting, "
+            f"retrying in {shipper.backoff_seconds:.0f}s."
         )
         return
 
@@ -306,7 +306,7 @@ def _send_spool(
         state.last_send = utc_now_iso()
         store.save(state)
 
-    _log(f"[send] {result.sent} kayıt gönderildi (spool: {spool.count()}).")
+    _log(f"[send] {result.sent} record(s) sent (spool: {spool.count()}).")
 
 
 def _maybe_flush(
@@ -346,7 +346,7 @@ def _maybe_flush(
         # Veri kaybolmaz: eşiği aşan ölçüm de, tetikleyen log da spool'da
         # duruyor ve normal gönderim turunda çıkacak. Bastırılan tek şey
         # ACELE etmek — cooldown'ın amacı zaten flush selini önlemek.
-        _log(f"[flush] {reason} eşiği aşıldı, cooldown sürüyor — atlandı.")
+        _log(f"[flush] {reason} threshold exceeded, cooldown active — skipped.")
         return False
 
     # SIRA ÖNEMLİDİR: snapshot önce spool'a yazılır, sonra gönderim yapılır.
@@ -363,12 +363,12 @@ def _maybe_flush(
 
     if not shipper.ready():
         _log(
-            f"[flush] {reason} eşiği aşıldı — backoff sürüyor, "
-            f"{shipper.backoff_seconds:.0f} sn sonra gönderilecek."
+            f"[flush] {reason} threshold exceeded — backoff active, "
+            f"sending in {shipper.backoff_seconds:.0f}s."
         )
         return False
 
-    _log(f"[flush] {reason} eşiği aşıldı — acil gönderim.")
+    _log(f"[flush] {reason} threshold exceeded — emergency ship.")
     _send_spool(shipper, config, state, store, spool)
     return True
 
@@ -396,22 +396,22 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
     _log(f"[start] TraceBox agent {__version__}")
     _log(f"[start] config: {loader.path}")
     _log(f"[start] state:  {store.path}")
-    _log(f"[start] spool:  {spool.path} ({spool.count()} bekleyen kayıt)")
-    _log(f"[start] hedef:  {config.collector_url}")
+    _log(f"[start] spool:  {spool.path} ({spool.count()} record(s) waiting)")
+    _log(f"[start] target: {config.collector_url}")
     _log(
-        "[start] aralıklar: "
+        "[start] intervals: "
         f"collect={config.collect_interval_seconds}s "
         f"send={config.send_interval_seconds}s "
         f"poll={config.command_poll_seconds}s (tick={TICK_SECONDS}s)"
     )
     _log(f"[start] logging_enabled={state.logging_enabled}")
     _log(
-        "[start] eklentiler: "
-        + (", ".join(config.enabled_addons) if config.enabled_addons else "yok (yalnızca çekirdek)")
+        "[start] add-ons: "
+        + (", ".join(config.enabled_addons) if config.enabled_addons else "none (core only)")
     )
     _log(
         "[start] journal cursor: "
-        + ("kayıtlı — kaldığı yerden" if state.journal_cursor else "yok — şimdiden başlanacak")
+        + ("stored — resuming" if state.journal_cursor else "none — starting from now")
     )
     pending_inventory = _startup_inventory(config, state)
 
@@ -480,6 +480,6 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
         spool.close()
 
         if deleted:
-            _log("[stop] cihaz silindi — agent duruyor, systemd yeniden başlatmayacak.")
+            _log("[stop] host deleted — agent stopping, systemd will not restart it.")
         else:
-            _log("[stop] döngü durdu.")
+            _log("[stop] loop stopped.")
