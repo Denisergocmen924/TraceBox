@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 import supabase_client
+from cors import install_cors
 from endpoints_commands import router as commands_router
 from endpoints_device import router as device_router
 from endpoints_ingest import router as ingest_router
@@ -54,6 +55,12 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+# CORS router'lardan ÖNCE takılıyor: middleware yığını dıştan içe çalışıyor,
+# yani preflight (OPTIONS) isteğinin bir yönlendirme aranmadan yanıtlanması
+# gerekiyor. FastAPI OPTIONS için ayrı bir yol tanımlamadığından, middleware
+# olmasaydı tarayıcının ön sorusu 405 ile dönerdi.
+install_cors(app)
 
 app.include_router(device_router)
 app.include_router(ingest_router)
