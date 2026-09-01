@@ -74,5 +74,6 @@ Thumbs.db
 CLAUDE.md
 md/
 
-# --- YEREL ÖRNEK DASHBOARD GÖRSELLERİ ----------------------------------------
+# --- YEREL ÖRNEK DASHBOARD GÖRSELLERİ VE DEPLOY SCRİPTİ ----------------------------------------
 dashboard/example
+dashboard/deploy.sh

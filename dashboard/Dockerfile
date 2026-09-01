@@ -53,7 +53,8 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
 RUN for v in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_COLLECTOR_URL; do \
       eval "value=\$$v"; \
       if [ -z "$value" ]; then \
-        echo "HATA: $v bos. fly.toml icindeki [build.args] bolumunu doldurun."; \
+        echo "ERROR: $v is empty. Every NEXT_PUBLIC_* value must reach the"; \
+        echo "       build as --build-arg. See README, Deploying the dashboard."; \
         exit 1; \
       fi; \
     done

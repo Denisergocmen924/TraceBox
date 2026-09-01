@@ -16,13 +16,18 @@ primary_region = "fra"
   # zamanında var. Üçü de tarayıcıya inen açık değerler; sır olan
   # SUPABASE_SERVICE_KEY yalnızca collector'da durur.
   #
-  # Aşağıdaki yer tutucular deploy'dan ÖNCE gerçek değerlerle doldurulmalı
-  # (ya da `fly deploy --build-arg NEXT_PUBLIC_SUPABASE_URL=... ` ile
-  # geçilmeli). Boş bırakılırsa derleme, imaj üretilmeden hata verir.
+  # Değerler bilerek BOŞ. Buraya örnek/yer tutucu bir değer yazmak, düz bir
+  # `fly deploy` çağrısının SESSİZCE bozuk bir imaj üretmesi demekti: Dockerfile
+  # koruması yalnızca boş değeri yakalar, yanlış değeri değil. Deploy yeşil
+  # görünür, site açılır, ama Supabase'e hiç bağlanamazdı.
+  #
+  # Doğru yol: değerleri `fly deploy --build-arg ...` ile geçirmek (README →
+  # "Deploying the dashboard"). Düz bir `fly deploy` artık derleme aşamasında
+  # GÜRÜLTÜLÜ biçimde durur.
   [build.args]
-    NEXT_PUBLIC_SUPABASE_URL = "https://xxxxxxxxxxxx.supabase.co"
-    NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOi..."
-    NEXT_PUBLIC_COLLECTOR_URL = "https://tracebox-collector.fly.dev"
+    NEXT_PUBLIC_SUPABASE_URL = ""
+    NEXT_PUBLIC_SUPABASE_ANON_KEY = ""
+    NEXT_PUBLIC_COLLECTOR_URL = ""
 
 [http_service]
   internal_port = 3000

@@ -194,6 +194,39 @@ uvicorn main:app --reload --port 8080
 curl localhost:8080/health
 ```
 
+## Running the dashboard locally
+
+```bash
+cd dashboard
+cp .env.example .env.local     # fill in the Supabase URL, anon key and collector URL
+npm install
+npm run dev                    # http://localhost:3000
+```
+
+## Deploying the dashboard
+
+The `NEXT_PUBLIC_*` values are **baked into the JavaScript at build time**, so they cannot be Fly
+secrets — a secret only exists at runtime, long after the bundle is printed. They have to reach the
+Docker build as `--build-arg`:
+
+```bash
+cd dashboard
+fly deploy \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_... \
+  --build-arg NEXT_PUBLIC_COLLECTOR_URL=https://<collector>.fly.dev
+```
+
+Or, to avoid retyping them, straight from the file the dev server already uses:
+
+```bash
+fly deploy $(grep -E '^NEXT_PUBLIC_' .env.local | sed 's/^/--build-arg /')
+```
+
+`fly.toml` leaves those three build args **empty on purpose**. An example value there would let a
+bare `fly deploy` succeed and ship an image that looks healthy but can never reach Supabase; empty
+values make the build stop instead.
+
 ## Database setup
 
 Against a Supabase project, run these in order:
