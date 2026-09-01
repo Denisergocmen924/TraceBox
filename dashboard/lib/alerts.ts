@@ -19,7 +19,7 @@
  * kullanıcının ilk bakacağı yer olmalı.
  */
 import { deviceStatus, type Device } from "./devices";
-import { FLUSH_THRESHOLD, SERIES } from "./metrics";
+import { FLUSH_THRESHOLD, SERIES, type SeriesDef } from "./metrics";
 
 export type AlertSeverity = "critical" | "warning" | "info";
 
@@ -46,11 +46,41 @@ const RANK: Record<AlertSeverity, number> = {
   info: 2,
 };
 
+/**
+ * Rozet metinleri İngilizce — kabuk (sidebar/toolbar/Overview) referans 2'nin
+ * dilini konuşuyor ve bu etiketler yalnızca orada, Alerts kartında görünüyor.
+ */
 export const SEVERITY_LABEL: Record<AlertSeverity, string> = {
-  critical: "kritik",
-  warning: "uyarı",
-  info: "bilgi",
+  critical: "Critical",
+  warning: "Warning",
+  info: "Info",
 };
+
+/**
+ * Bir yüzdenin RENGİ. Tek yerde duruyor çünkü aynı eşik üç ayrı ekranda
+ * okunuyor: kart çubuğu, Host Status tablosu ve Top Hosts çubuğu. Üçü ayrı
+ * ayrı hesaplasaydı biri er ya da geç geride kalır ve aynı sayı bir ekranda
+ * sarı, diğerinde siyah görünürdü.
+ *
+ * Eşikler agent'ın ACİL GÖNDERİM eşikleri (§7 / agent/config.example.toml).
+ * Yani kırmızı bir sayı keyfi bir tasarım tercihi değil, tam olarak şunu
+ * söylüyor: "agent bu değeri acil sayıp spool'u beklemeden flush ederdi".
+ */
+export function percentTone(
+  series: SeriesDef,
+  percent: number | null,
+): { bar: string; text: string; alarm: boolean } {
+  if (percent == null)
+    return { bar: "bg-line", text: "text-faint", alarm: false };
+
+  const limit = FLUSH_THRESHOLD[series.key];
+  if (percent >= limit)
+    return { bar: "bg-danger", text: "text-danger", alarm: true };
+  if (percent >= limit - NEAR_THRESHOLD_MARGIN)
+    return { bar: "bg-warn", text: "text-warn", alarm: true };
+
+  return { bar: series.tone.bar, text: "text-fg", alarm: false };
+}
 
 export function buildAlerts(devices: Device[], now: number): Alert[] {
   const out: Alert[] = [];
@@ -63,7 +93,7 @@ export function buildAlerts(devices: Device[], now: number): Alert[] {
       out.push({
         id: `${device.id}:offline`,
         severity: "critical",
-        title: "Cihaz sessiz — agent ulaşılamıyor",
+        title: "Host silent — agent unreachable",
         deviceId: device.id,
         deviceName: device.device_name,
         at: seen,
@@ -74,7 +104,7 @@ export function buildAlerts(devices: Device[], now: number): Alert[] {
       out.push({
         id: `${device.id}:deleting`,
         severity: "warning",
-        title: "Silme emri bekliyor",
+        title: "Delete command pending",
         deviceId: device.id,
         deviceName: device.device_name,
         at: seen,
@@ -85,7 +115,7 @@ export function buildAlerts(devices: Device[], now: number): Alert[] {
       out.push({
         id: `${device.id}:paused`,
         severity: "info",
-        title: "Gönderim duraklatıldı — veri yerelde birikiyor",
+        title: "Shipping paused — data buffering locally",
         deviceId: device.id,
         deviceName: device.device_name,
         at: seen,
@@ -107,7 +137,7 @@ export function buildAlerts(devices: Device[], now: number): Alert[] {
         out.push({
           id: `${device.id}:${series.key}:over`,
           severity: "critical",
-          title: `${series.label} eşiği aşıldı — %${percent.toFixed(0)}`,
+          title: `${series.label} usage above ${limit}%`,
           deviceId: device.id,
           deviceName: device.device_name,
           at,
@@ -116,7 +146,7 @@ export function buildAlerts(devices: Device[], now: number): Alert[] {
         out.push({
           id: `${device.id}:${series.key}:near`,
           severity: "warning",
-          title: `${series.label} eşiğe yaklaştı — %${percent.toFixed(0)}`,
+          title: `High ${series.label} usage detected`,
           deviceId: device.id,
           deviceName: device.device_name,
           at,

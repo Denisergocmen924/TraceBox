@@ -1,0 +1,37 @@
+# =============================================================================
+# Docker build bağlamı dışında kalacaklar.
+#
+# .gitignore'un kopyası DEĞİL — iki dosya iki farklı soruya cevap veriyor.
+# Docker, git'in ne düşündüğüne bakmaz: `fly deploy` bu klasörün tamamını
+# paketleyip uzak builder'a yollar. Buradaki her satır hem yükleme süresini
+# hem de imaja sızabilecek şeyleri kısıyor.
+# =============================================================================
+
+# --- SIRLAR ------------------------------------------------------------------
+# .env.local gerçek Supabase adresini ve anon key'i tutuyor. Bunlar sır değil
+# (bkz. .env.example) ama imaja dosya olarak girmelerinin bir sebebi de yok:
+# derleme değerleri build-arg ile geliyor, bir dosyanın sessizce onları
+# ezmesini istemiyoruz.
+.env
+.env.*
+!.env.example
+
+# --- yeniden üretilebilenler -------------------------------------------------
+# node_modules imajın içinde `npm ci` ile yeniden kuruluyor; yerelden kopyalamak
+# hem yüzlerce megabayt yükleme hem de yanlış platform için derlenmiş ikili
+# dosyalar demek (yerel makine ile builder aynı mimaride olmayabilir).
+node_modules
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# --- imajda işi olmayanlar ---------------------------------------------------
+# example/ tasarım referans görselleri: onlarca megabayt PNG, çalışma zamanında
+# hiç okunmuyor. .gitignore'da da var ama Docker onu görmüyor.
+example
+README.md
+.git
+.gitignore
+.vscode
+.DS_Store

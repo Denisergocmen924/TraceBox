@@ -6,10 +6,11 @@
  * Yerleşim 70/30: geniş sol panel inceleme alanı (çizelge + loglar), dar sağ
  * panel sabit bağlam ve aksiyonlar. Sağ panel kaydırmada yerinde kalır.
  *
- * Aralık (24 saat … 10 gün) burada DEĞİL, toolbar'da seçiliyor ve buraya
- * kabuktan geliyor. §9.8: "zaman aralığı TEKTİR" — aynı seçim hem grafiği hem
- * log listesini daraltıyor, dolayısıyla ikisinin ortak bir üstünde durması
- * gerekiyordu.
+ * Aralık (24 saat … 10 gün) burada DEĞİL, toolbar'da seçiliyor; grafikte
+ * sürükleyerek yapılan ince ayar da (§9.8) aynı yerde. §9.8: "zaman aralığı
+ * TEKTİR" — aynı pencere hem grafiği hem log listesini daraltıyor, dolayısıyla
+ * ikisinin ortak bir üstünde (appState) durması gerekiyordu. Bu sayfa pencereyi
+ * ne tutuyor ne de aşağı taşıyor; iki bileşen de doğrudan oradan okuyor.
  */
 "use client";
 
@@ -17,10 +18,11 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/appState";
 import { fetchDevice, type DeviceDetail } from "@/lib/devices";
+import { errorMessage } from "@/lib/errors";
 import { IconChevron } from "@/components/icons";
 import { DetailPanel } from "./DetailPanel";
-import { Timeline } from "./Timeline";
-import { LogList } from "./LogList";
+import { Timeline } from "@/components/Timeline";
+import { LogList } from "@/components/LogList";
 
 /** Künye yenileme — liste ekranıyla aynı ritim, agent'ın komut poll'ü. */
 const REFRESH_MS = 10_000;
@@ -31,7 +33,7 @@ export default function DeviceDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { now, anchor, rangeSeconds } = useApp();
+  const { now } = useApp();
 
   const [device, setDevice] = useState<DeviceDetail | null>(null);
   const [missing, setMissing] = useState(false);
@@ -44,7 +46,7 @@ export default function DeviceDetailPage({
       else setMissing(true);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   }, [id]);
 
@@ -58,7 +60,7 @@ export default function DeviceDetailPage({
     <div className="mx-auto max-w-7xl">
       <nav className="mb-5 flex items-center gap-1.5 text-sm text-muted">
         <Link href="/devices" className="transition hover:text-fg">
-          Cihazlar
+          Hosts
         </Link>
         <IconChevron className="size-3.5 text-faint" />
         <span className="truncate text-fg">
@@ -68,7 +70,7 @@ export default function DeviceDetailPage({
 
       {error && (
         <p className="rounded-card border border-danger/40 bg-danger/5 p-4 text-sm text-danger">
-          Cihaz okunamadı: {error}
+          Could not load the host: {error}
         </p>
       )}
 
@@ -79,9 +81,9 @@ export default function DeviceDetailPage({
       */}
       {missing && (
         <div className="rounded-card border border-dashed border-line bg-panel/50 p-12 text-center">
-          <p className="font-medium">Cihaz bulunamadı.</p>
+          <p className="font-medium">Host not found.</p>
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-            Silinmiş olabilir ya da bu hesaba ait olmayabilir.
+            It may have been deleted, or it may not belong to this account.
           </p>
         </div>
       )}
@@ -99,17 +101,10 @@ export default function DeviceDetailPage({
             <Timeline
               deviceId={device.id}
               ramTotalMb={device.ram_total_mb}
-              anchor={anchor}
-              rangeSeconds={rangeSeconds}
             />
-            <LogList
-              deviceId={device.id}
-              rangeSeconds={rangeSeconds}
-              anchor={anchor}
-              now={now}
-            />
+            <LogList deviceId={device.id} />
           </div>
-          <DetailPanel device={device} now={now} />
+          <DetailPanel device={device} now={now} onChanged={load} />
         </div>
       )}
     </div>

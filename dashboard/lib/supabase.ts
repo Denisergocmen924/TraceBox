@@ -23,7 +23,7 @@ function required(name: string, value: string | undefined): string {
     // Sessizce undefined ile devam etmek en kötüsü: istemci kurulur, her
     // sorgu anlamsız bir ağ hatasıyla döner ve sebebi görünmez olur.
     throw new Error(
-      `Eksik ortam değişkeni: ${name}. dashboard/.env.example dosyasına bak.`,
+      `Missing environment variable: ${name}. See dashboard/.env.example.`,
     );
   }
   return value;

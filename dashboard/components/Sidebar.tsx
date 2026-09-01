@@ -1,38 +1,124 @@
 /**
- * Sol sabit navigasyon (tasarım planı §3).
+ * Sol sabit navigasyon — `dashboard/example/2`'nin BİREBİR karşılığı.
  *
- * Üstte logo + wordmark, ortada gezinme, altta kullanıcı profili — referans
- * görselin yerleşimi birebir bu.
+ * Önceki hâlde menü referanstan bilerek sapıyordu: yalnızca "Cihazlar" vardı,
+ * altında hesabın cihazları listeleniyordu. Gerekçe "tıklanınca boş sayfa açan
+ * menü ürünü olduğundan büyük gösterir" idi. Kullanıcı bu yorumu geri aldı ve
+ * görselin aynen kopyalanmasını istedi (§9.11.1'in "birebir" kuralı); menü
+ * artık referanstaki yedi öğe.
  *
- * Menü listesi planınkinden FARKLI ve fark bilerek: plan Services, Containers,
- * Traces, Dashboards istiyor; TraceBox ajanı bunların hiçbirini toplamıyor.
- * Planın kendi §12 maddesi de "metric'leri agent'ın gerçekten topladığı
- * verilerle sınırla" diyor. Tıklanınca boş sayfa açan bir menü, gezinmeyi
- * kolaylaştırmaz — sadece ürünü olduğundan büyük gösterir.
+ * İlk hâlde yalnızca ilk iki öğenin (Overview, Hosts) sayfası vardı; kalan beşi
+ * tıklanmayan `<span>` olarak duruyordu — var olmayan bir sayfaya href vermek
+ * kullanıcıyı 404'e koşturmak olurdu. 2026-08-31'de beşinin de kendi sayfası
+ * yazıldı ve pasif dal kaldırıldı: menünün tamamı artık gerçekten çalışıyor.
  *
- * Sidebar'ın görsel yoğunluğu bunun yerine GERÇEK veriden geliyor: hesabın
- * cihazları isim isim listeleniyor. Hem referanstaki dolu his korunuyor, hem
- * de bu liste gerçekten işe yarıyor — cihaz detayındayken başka bir cihaza
- * geçmek için listeye dönmek gerekmiyor.
+ * Genişlik 212px — görselden ölçüldü (kenar çizgisi x=212). Etiketler İngilizce,
+ * yine görseldeki gibi.
  */
 "use client";
 
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/appState";
-import { deviceStatus } from "@/lib/devices";
-import { IconClose, IconLogout, IconServer } from "./icons";
-import { StatusDot } from "./StatusPill";
+import { OFFLINE_AFTER_SECONDS, type Device } from "@/lib/devices";
+import {
+  IconBell,
+  IconChart,
+  IconClose,
+  IconFileText,
+  IconHome,
+  IconInventory,
+  IconServer,
+  IconSettings,
+} from "./icons";
 
-/** E-postadan iki harf: "denisergocmen@gmail.com" → "DE". */
-function initials(email: string): string {
-  const local = email.split("@")[0] ?? "";
-  const parts = local.split(/[._-]+/).filter(Boolean);
-  const letters =
-    parts.length > 1 ? parts[0][0] + parts[1][0] : local.slice(0, 2);
-  return letters.toUpperCase();
+/** Sol alt kutudaki sürüm. Agent'ın değil, DASHBOARD'ın sürümü. */
+const APP_VERSION = "v1.0.0";
+
+type NavItem = {
+  label: string;
+  icon: (p: { className?: string }) => React.ReactElement;
+  href: string;
+  /** Aktiflik testi — /devices/<id> da "Hosts" sayılmalı. */
+  match: (pathname: string) => boolean;
+};
+
+const NAV: NavItem[] = [
+  {
+    label: "Overview",
+    icon: IconHome,
+    href: "/overview",
+    match: (p) => p === "/overview",
+  },
+  {
+    label: "Hosts",
+    icon: IconServer,
+    href: "/devices",
+    match: (p) => p.startsWith("/devices"),
+  },
+  {
+    label: "Metrics",
+    icon: IconChart,
+    href: "/metrics",
+    match: (p) => p === "/metrics",
+  },
+  {
+    label: "Logs",
+    icon: IconFileText,
+    href: "/logs",
+    match: (p) => p === "/logs",
+  },
+  {
+    label: "Alerts",
+    icon: IconBell,
+    href: "/alerts",
+    match: (p) => p === "/alerts",
+  },
+  {
+    label: "Inventory",
+    icon: IconInventory,
+    href: "/inventory",
+    match: (p) => p === "/inventory",
+  },
+  {
+    label: "Settings",
+    icon: IconSettings,
+    href: "/settings",
+    match: (p) => p === "/settings",
+  },
+];
+
+/**
+ * Referans 2'nin sol alt köşesindeki "Collector · Healthy" rozeti.
+ *
+ * Uydurulmadı, GERÇEK veriden türüyor: cihazlardan biri son 60 saniye içinde
+ * görüldüyse veri yolunun tamamı (agent → collector → Supabase → tarayıcı)
+ * o an çalışıyor demektir. Ayrı bir sağlık isteği atmıyoruz; zaten elimizde
+ * olan bilgiyi okuyor.
+ *
+ * Üçüncü hâl önemli: hiç cihaz yokken "Healthy" demek bir şey KANITLAMAZ,
+ * çünkü test edilecek bir yol yok. O yüzden orada başka bir şey yazıyor.
+ */
+function collectorState(devices: Device[] | null, now: number) {
+  if (!devices || devices.length === 0) {
+    return { label: "No hosts", tone: "bg-panel-2 text-faint", dot: "bg-faint" };
+  }
+  const fresh = devices.some(
+    (d) =>
+      d.last_seen != null &&
+      now - Date.parse(d.last_seen) <= OFFLINE_AFTER_SECONDS * 1000,
+  );
+  return fresh
+    ? { label: "Healthy", tone: "bg-ok-soft text-ok", dot: "bg-ok" }
+    : { label: "Silent", tone: "bg-warn-soft text-warn", dot: "bg-warn" };
+}
+
+/** Menü satırının ortak gövdesi. */
+function itemClass(active: boolean): string {
+  return active
+    ? "bg-accent-soft text-accent"
+    : "text-muted transition hover:bg-panel-2 hover:text-fg";
 }
 
 export function Sidebar({
@@ -43,11 +129,9 @@ export function Sidebar({
   open: boolean;
   onClose: () => void;
 }) {
-  const { devices, now, email } = useApp();
+  const { devices, now } = useApp();
   const pathname = usePathname();
-  const activeId = pathname.startsWith("/devices/")
-    ? pathname.split("/")[2]
-    : null;
+  const collector = collectorState(devices, now);
 
   return (
     <>
@@ -58,123 +142,81 @@ export function Sidebar({
       */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm transition-opacity lg:hidden ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-bg-soft transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-(--sidebar-w) flex-col border-r border-line bg-bg-soft transition-transform duration-200 lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* --- marka ------------------------------------------------------ */}
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-5">
+        {/* --- marka -------------------------------------------------------
+            Yükseklik üst çubukla AYNI (80px): iki çizgi ekranın karşı
+            uçlarında buluşuyor ve kabuk tek parça görünüyor. Logo görselden
+            alınmadı — kullanıcının tek istisnası buydu. */}
+        <div className="flex h-20 shrink-0 items-center gap-2.5 px-5">
           <Image
             src="/tracebox-mark.png"
             alt=""
             width={160}
             height={160}
             priority
-            className="size-9 shrink-0 rounded-full"
+            className="size-8 shrink-0 rounded-lg"
           />
-          {/*
-            Wordmark: TRACE beyaz, BOX accent (plan §3). Marka renginin ekranda
-            göründüğü ilk yer burası; aynı indigo aşağıda seçili menü ve bütün
-            aksiyon butonlarında tekrar ediyor.
-          */}
-          <span className="text-[15px] font-semibold tracking-[0.18em]">
-            TRACE<span className="text-accent">BOX</span>
+          <span className="text-[17px] font-semibold tracking-tight">
+            TraceBox
           </span>
           <button
             onClick={onClose}
-            aria-label="Menüyü kapat"
+            aria-label="Close menu"
             className="ml-auto text-muted transition hover:text-fg lg:hidden"
           >
             <IconClose className="size-5" />
           </button>
         </div>
 
-        {/* --- gezinme ---------------------------------------------------- */}
-        <nav className="px-3 py-4">
-          <Link
-            href="/devices"
-            onClick={onClose}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-              pathname.startsWith("/devices")
-                ? "bg-accent text-white"
-                : "text-muted hover:bg-panel hover:text-fg"
-            }`}
-          >
-            <IconServer className="size-[18px] shrink-0" />
-            Cihazlar
-            {devices && (
-              <span
-                className={`ml-auto rounded-md px-1.5 py-0.5 text-xs tabular-nums ${
-                  pathname.startsWith("/devices")
-                    ? "bg-white/15"
-                    : "bg-panel-2 text-faint"
-                }`}
+        {/* --- gezinme -----------------------------------------------------
+            Seçili öğe DOLU değil, yumuşak mor bir hap — referansta da öyle.
+            Dolu zemin daha çok bağırıyor; burada bağırması gereken bir şey
+            yok, sadece "buradasın" demesi yeterli. */}
+        <nav className="flex flex-col gap-3.5 px-3 pt-1">
+          {NAV.map(({ label, icon: Icon, href, match }) => {
+            const active = match(pathname);
+            return (
+              <Link
+                key={label}
+                href={href}
+                onClick={onClose}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm ${itemClass(
+                  active,
+                )} ${active ? "font-medium" : ""}`}
               >
-                {devices.length}
-              </span>
-            )}
-          </Link>
+                <Icon className="size-[18px] shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* --- cihazlar --------------------------------------------------- */}
-        <div className="flex min-h-0 flex-1 flex-col border-t border-line pt-4">
-          <p className="px-6 pb-2 text-[11px] font-semibold tracking-[0.12em] text-faint">
-            CİHAZLAR
-          </p>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-            {devices?.length === 0 && (
-              <p className="px-3 py-2 text-xs text-faint">Henüz cihaz yok.</p>
-            )}
-            {devices?.map((device) => (
-              <Link
-                key={device.id}
-                href={`/devices/${device.id}`}
-                onClick={onClose}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
-                  activeId === device.id
-                    ? "bg-accent-soft text-fg"
-                    : "text-muted hover:bg-panel hover:text-fg"
-                }`}
+        {/* --- toplayıcı rozeti (referans 2, sol alt) ----------------------
+            İki satır, aralarında çizgi: üstte durum, altta sürüm. */}
+        <div className="mt-auto shrink-0 p-4">
+          <div className="overflow-hidden rounded-lg border border-line">
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              <span className={`size-2 shrink-0 rounded-full ${collector.dot}`} />
+              <span className="text-[13px] font-medium">Collector</span>
+              <span
+                className={`ml-auto rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${collector.tone}`}
               >
-                <StatusDot status={deviceStatus(device, now)} />
-                <span className="truncate">{device.device_name}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* --- kullanıcı (plan §3: avatar + isim + rol) -------------------- */}
-        <div className="shrink-0 border-t border-line p-3">
-          <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
-              {initials(email)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium" title={email}>
-                {email.split("@")[0]}
-              </p>
-              {/*
-                "Rol" alanı planda var. TraceBox'ta rol kavramı YOK — accounts
-                tablosunda tek bir sahip var, paylaşım veya ekip üyeliği yok.
-                Yazılan şey bu yüzden uydurma bir unvan değil, olduğu gibi
-                gerçek: bu hesabın sahibi.
-              */}
-              <p className="truncate text-xs text-faint">Hesap sahibi</p>
+                {collector.label}
+              </span>
             </div>
-            <button
-              onClick={() => supabase().auth.signOut()}
-              aria-label="Çıkış yap"
-              title="Çıkış yap"
-              className="shrink-0 rounded-lg p-2 text-muted transition hover:bg-panel hover:text-danger"
-            >
-              <IconLogout className="size-[18px]" />
-            </button>
+            <p className="border-t border-line px-3 py-2 text-xs text-muted">
+              {APP_VERSION}
+            </p>
           </div>
         </div>
       </aside>

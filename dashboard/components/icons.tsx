@@ -205,3 +205,166 @@ export function IconClock(p: IconProps) {
     </Svg>
   );
 }
+
+/* --- tema düğmesi (§9.11.1) ----------------------------------------------- */
+
+export function IconSun(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </Svg>
+  );
+}
+
+export function IconMoon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
+    </Svg>
+  );
+}
+
+/** Ağ giriş/çıkış — özet kartlarındaki dördüncü ölçü. */
+export function IconNetwork(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M7 8 3 12l4 4" />
+      <path d="m17 8 4 4-4 4" />
+      <path d="M14 5 10 19" />
+    </Svg>
+  );
+}
+
+/** Aşağı ok — açılır listelerin sağındaki işaret. */
+export function IconChevronDown(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}
+
+/** Bulut — sidebar altındaki toplayıcı rozeti. */
+export function IconCloud(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.2 11.2 3.5 3.5 0 0 0 7 19Z" />
+    </Svg>
+  );
+}
+
+/** Geri ok — yakınlaştırmada bir adım geri (§9.8). */
+export function IconArrowLeft(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M19 12H5m0 0 6-6m-6 6 6 6" />
+    </Svg>
+  );
+}
+
+/** Dışa açılan oklar — yakınlaştırmayı sıfırla, tüm aralığa dön (§9.8). */
+export function IconExpand(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+    </Svg>
+  );
+}
+
+/** Yakınlaştırma büyüteci — sürükleyerek seçim ipucu. */
+export function IconZoom(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5M8 11h6" />
+    </Svg>
+  );
+}
+
+/* --- kenar çubuğu gezinme simgeleri (referans 2) --------------------------
+ * Yedisi de aynı ailede: 24x24, 1.5 kalınlık, currentColor. Referanstaki
+ * çizgi kalınlığı ve yuvarlaklık zaten bu ailenin değerleri; simge başına
+ * ayrı bir stil yok.
+ */
+
+/** Overview — referansın ilk menü öğesi. */
+export function IconHome(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
+      <path d="M9.5 20v-5.5h5V20" />
+    </Svg>
+  );
+}
+
+/** Metrics — eksen + çubuklar. */
+export function IconChart(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 4v16h16" />
+      <path d="M8.5 16v-4M12.5 16V8M16.5 16v-6" />
+    </Svg>
+  );
+}
+
+/** Logs — satırlı belge. */
+export function IconFileText(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="3.5" width="16" height="17" rx="2" />
+      <path d="M8 8.5h8M8 12h8M8 15.5h5" />
+    </Svg>
+  );
+}
+
+/** Inventory — bölmeli kutu. */
+export function IconInventory(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 9.5h3M7 14.5h3M14 9.5h3M14 14.5h3" />
+    </Svg>
+  );
+}
+
+/** Settings — dişli. */
+export function IconSettings(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" />
+    </Svg>
+  );
+}
+
+/* --- cihaz kaydı (§9.10 anahtar penceresi) -------------------------------- */
+
+/** Anahtar — "Add Host" penceresinin başlık simgesi. */
+export function IconKey(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="8" cy="15" r="4" />
+      <path d="m10.8 12.2 8.2-8.2M16.5 6.5l2 2M14 9l2 2" />
+    </Svg>
+  );
+}
+
+/** Panoya kopyala. */
+export function IconCopy(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" />
+    </Svg>
+  );
+}
+
+/** Onay — kopyalandı geri bildirimi. */
+export function IconCheck(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m5 12.5 4.5 4.5L19 7" />
+    </Svg>
+  );
+}

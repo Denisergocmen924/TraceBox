@@ -43,18 +43,25 @@ export default function AppLayout({
   if (status !== "signedIn") {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted">
-        Yükleniyor…
+        Loading…
       </div>
     );
   }
 
   return (
-    <AppProvider email={session.user.email ?? ""}>
+    /* accounts.id = auth.users.id (§5), yani oturumdaki kullanıcı kimliği aynı
+       zamanda hesap kimliği. commands satırı eklerken account_id kolonu bununla
+       doldurulacak; RLS ikisinin eşit olmasını arıyor. */
+    <AppProvider email={session.user.email ?? ""} accountId={session.user.id}>
       <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
-      {/* Sidebar `fixed`; içerik geniş ekranda onun genişliği kadar içeri alınır. */}
-      <div className="lg:pl-64">
+      {/* Sidebar `fixed`; içerik geniş ekranda onun genişliği kadar içeri alınır.
+          Ölçü --sidebar-w değişkeninden geliyor (app/globals.css), yani çubuk
+          ve boşluk tek bir sayıyı paylaşıyor. */}
+      <div className="lg:pl-(--sidebar-w)">
         <Topbar onOpenMenu={() => setMenuOpen(true)} />
-        <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        {/* Yatay boşluk 30px — referansta kenar çubuğunun çizgisi ile ilk
+            kartın kenarı arasındaki ölçü. */}
+        <main className="px-4 py-6 sm:px-[30px]">{children}</main>
       </div>
     </AppProvider>
   );

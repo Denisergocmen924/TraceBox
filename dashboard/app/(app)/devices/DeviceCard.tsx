@@ -14,30 +14,24 @@
 
 import Link from "next/link";
 import { deviceStatus, type Device } from "@/lib/devices";
-import { FLUSH_THRESHOLD, SERIES, type SeriesDef } from "@/lib/metrics";
+import { SERIES, type SeriesDef } from "@/lib/metrics";
 import { relativeTime } from "@/lib/time";
-import { NEAR_THRESHOLD_MARGIN } from "@/lib/alerts";
+import { percentTone } from "@/lib/alerts";
 import { StatusPill } from "@/components/StatusPill";
-import { IconChevron, IconClock, IconServer } from "@/components/icons";
+import {
+  IconAlert,
+  IconChevron,
+  IconClock,
+  IconServer,
+} from "@/components/icons";
 
-/**
- * Çubuğun rengi normalde ÖLÇÜNÜN rengi (CPU indigo, RAM mor, Disk cyan) —
- * plan §2'nin "renk metric ayrımı yapar" maddesi. Eşiğe yaklaşıldığında
- * DURUM rengi devralıyor, çünkü o noktada kullanıcının bilmesi gereken şey
- * artık hangi ölçüye baktığı değil, sorunun kendisi.
- *
- * Eşikler agent'ın ACİL GÖNDERİM eşikleri (agent/config.example.toml: cpu 90,
- * ram 90, disk 95). Kırmızı çubuk keyfi bir tasarım kararı değil, tam olarak
- * şunu söylüyor: "agent bu değeri acil sayıp spool'u beklemeden flush ederdi".
+/*
+ * Çubuğun rengi normalde ÖLÇÜNÜN rengi (CPU mor, RAM yeşil, Disk turuncu —
+ * referans 2'nin dört kartı). Eşiğe yaklaşıldığında DURUM rengi devralıyor,
+ * çünkü o noktada kullanıcının bilmesi gereken şey artık hangi ölçüye baktığı
+ * değil, sorunun kendisi. Hesap lib/alerts.ts'te: aynı eşik Overview'daki
+ * Host Status tablosunda ve Top Hosts çubuklarında da okunuyor.
  */
-function tone(series: SeriesDef, percent: number | null) {
-  if (percent == null) return { bar: "bg-line", text: "text-faint" };
-  const limit = FLUSH_THRESHOLD[series.key];
-  if (percent >= limit) return { bar: "bg-danger", text: "text-danger" };
-  if (percent >= limit - NEAR_THRESHOLD_MARGIN)
-    return { bar: "bg-warn", text: "text-warn" };
-  return { bar: series.tone.bar, text: "text-fg" };
-}
 
 function Metric({
   series,
@@ -49,13 +43,21 @@ function Metric({
   value: string;
 }) {
   const clamped = percent == null ? null : Math.min(100, Math.max(0, percent));
-  const { bar, text } = tone(series, clamped);
+  const { bar, text, alarm } = percentTone(series, clamped);
 
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-muted">{series.label}</span>
-        <span className={`tabular-nums font-medium ${text}`}>{value}</span>
+        <span className={`flex items-center gap-1 tabular-nums font-medium ${text}`}>
+          {/*
+            Uyarı üçgeni, çubuk rengine ek bir sinyal. Disk rengi (turuncu) ile
+            uyarı kehribarı yakın akraba; sinyal yalnızca çubuğa bırakılsaydı
+            "disk eşiğe yaklaştı" hâli, normal disk çubuğundan ayırt edilemezdi.
+          */}
+          {alarm && <IconAlert className="size-3.5 shrink-0" />}
+          {value}
+        </span>
       </div>
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-2">
         {clamped != null && (
@@ -76,7 +78,7 @@ export function DeviceCard({ device, now }: { device: Device; now: number }) {
   const subtitle =
     [
       [device.os_name, device.os_version].filter(Boolean).join(" "),
-      device.cpu_cores_logical ? `${device.cpu_cores_logical} çekirdek` : null,
+      device.cpu_cores_logical ? `${device.cpu_cores_logical} cores` : null,
       device.arch,
     ]
       .filter(Boolean)
@@ -85,7 +87,7 @@ export function DeviceCard({ device, now }: { device: Device; now: number }) {
   return (
     <Link
       href={`/devices/${device.id}`}
-      className="group flex flex-col rounded-card border border-line bg-panel transition hover:border-accent/60 hover:bg-panel-2/40"
+      className="group flex flex-col rounded-card border border-line bg-panel shadow-card transition hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-pop"
     >
       <div className="flex items-start gap-3 p-5">
         <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
@@ -115,7 +117,7 @@ export function DeviceCard({ device, now }: { device: Device; now: number }) {
 
       <div className="mt-auto flex items-center gap-2 border-t border-line px-5 py-3 text-xs text-muted">
         <IconClock className="size-3.5 shrink-0 text-faint" />
-        {relativeTime(device.last_seen, now)} görüldü
+        Seen {relativeTime(device.last_seen, now)}
         <IconChevron className="ml-auto size-4 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
       </div>
     </Link>

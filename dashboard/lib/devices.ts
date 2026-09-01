@@ -10,6 +10,7 @@
  * (`account_id = auth.uid()`) zaten satır bazında süzüyor. Elle filtre yazmak
  * güvenlik eklemez, sadece politikanın çalıştığı yanılsaması yaratır.
  */
+import type { CommandType } from "./commands";
 import { supabase } from "./supabase";
 
 /**
@@ -24,6 +25,13 @@ export type LatestMetric = {
   cpu_percent: number | null;
   ram_used_mb: number | null;
   disk_percent: number | null;
+  /*
+   * Ağ, agent tarafında ORAN olarak hesaplanıyor (§4.2): saniyedeki MB, kümüle
+   * toplam değil. Kart üstündeki üç çubukta yok — orada yüzde okunuyor ve ağın
+   * yüzdesi olmaz (tavanı yok). Yalnızca özet kartlarında görünüyor.
+   */
+  net_sent_mb: number | null;
+  net_recv_mb: number | null;
 };
 
 export type DeviceRow = {
@@ -36,6 +44,12 @@ export type DeviceRow = {
   ram_total_mb: number | null;
   disk_total_mb: number | null;
   agent_version: string | null;
+  /*
+   * Açılış anı. Listede DE gerekiyor: Overview'ın Host Status tablosunda
+   * "Uptime" sütunu var ve o sütun bu alandan türüyor. Yalnızca detayda
+   * tutulsaydı tablo cihaz başına ikinci bir sorgu açmak zorunda kalırdı.
+   */
+  last_boot: string | null;
   logging_enabled: boolean;
   last_seen: string | null;
   metrics: LatestMetric[]; // gömülü sorgu her zaman dizi döner: 0 ya da 1 satır
@@ -72,10 +86,10 @@ export function deviceStatus(device: Device, now: number): DeviceStatus {
 }
 
 export const STATUS_LABEL: Record<DeviceStatus, string> = {
-  online: "Çevrimiçi",
-  offline: "Çevrimdışı",
-  paused: "Duraklatıldı",
-  deleting: "Silinme bekliyor",
+  online: "Online",
+  offline: "Offline",
+  paused: "Paused",
+  deleting: "Deleting",
 };
 
 /**
@@ -83,11 +97,12 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
  * Detay ekranı (§9.4) bunun üstüne envanterin kalanını ekler.
  */
 const LIST_COLUMNS = `id, device_name, os_name, os_version, arch, cpu_cores_logical,
-   ram_total_mb, disk_total_mb, agent_version, logging_enabled, last_seen,
-   metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent )`;
+   ram_total_mb, disk_total_mb, agent_version, last_boot, logging_enabled, last_seen,
+   metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent,
+             net_sent_mb, net_recv_mb )`;
 
 const DETAIL_COLUMNS = `${LIST_COLUMNS}, cpu_model, cpu_cores_physical,
-   kernel_version, last_boot, gpu_model, external_ip, enabled_addons`;
+   kernel_version, gpu_model, external_ip, enabled_addons`;
 
 export async function fetchDevices(): Promise<Device[]> {
   const client = supabase();
@@ -132,10 +147,16 @@ export async function fetchDevices(): Promise<Device[]> {
 
 /** Sağ paneldeki künye — listede gereksiz olan envanter alanları. */
 export type DeviceDetail = Device & {
+  /**
+   * Bu cihaz için BEKLEYEN komut türleri. Listede yok, çünkü kart yalnızca
+   * silinmeyi gösteriyor; detayda gerekiyor: aynı komutu ikinci kez sıraya
+   * koymayı engelleyen ve "gönderildi, uygulanmayı bekliyor" ara durumunu
+   * yazan tek kaynak bu (§6 — ayrı bir bayrak sütunu yok, hâl kuyruktan okunur).
+   */
+  pendingCommands: CommandType[];
   cpu_model: string | null;
   cpu_cores_physical: number | null;
   kernel_version: string | null;
-  last_boot: string | null;
   gpu_model: string | null;
   external_ip: string | null;
   enabled_addons: string[];
@@ -162,13 +183,14 @@ export async function fetchDevice(id: string): Promise<DeviceDetail | null> {
     .limit(1, { referencedTable: "metrics" })
     .maybeSingle();
 
+  // Listeden farklı olarak TÜM bekleyen komutlar çekiliyor, yalnızca delete
+  // değil: sağ paneldeki duraklat/devam düğmesi de kendi emrinin sırada olup
+  // olmadığını bilmek zorunda.
   const commandQuery = client
     .from("commands")
-    .select("id")
+    .select("type")
     .eq("device_id", id)
-    .eq("type", "delete")
-    .eq("status", "pending")
-    .limit(1);
+    .eq("status", "pending");
 
   const [device, commands] = await Promise.all([deviceQuery, commandQuery]);
 
@@ -182,9 +204,99 @@ export async function fetchDevice(id: string): Promise<DeviceDetail | null> {
   const { metrics, ...rest } = device.data as unknown as DeviceRow &
     Omit<DeviceDetail, keyof Device>;
 
+  const pending = (commands.data ?? []).map((c) => c.type as CommandType);
+
   return {
     ...rest,
     latest: metrics[0] ?? null,
-    deletePending: (commands.data ?? []).length > 0,
+    pendingCommands: pending,
+    deletePending: pending.includes("delete"),
   };
+}
+
+/**
+ * ZORLA KALDIRMA — `devices` satırını doğrudan siler (§6, §9.13).
+ *
+ * Normal silme yolu bu DEĞİLDİR. Orada dashboard yalnızca bir `delete` komutu
+ * kuyruğa koyar; agent onu alır, makineyi temizler, ack'ler ve satırı
+ * COLLECTOR siler (§11 Boşluk E). Sıralama böyle olmak zorunda: satır erken
+ * silinseydi agent bir sonraki poll'da 401 alır ve silme emrini hiç göremezdi.
+ *
+ * Bu fonksiyon o sıralamayı bilerek atlıyor, çünkü tam olarak agent'ın bir
+ * daha hiç bağlanmayacağı durum için var: disk ölmüş, VM yok edilmiş, makine
+ * emekliye ayrılmış. O cihaz için kuyrukta sonsuza kadar bekleyen bir emir ve
+ * listede duran ölü bir kart kalmasın diye kayıt elle düşürülüyor.
+ *
+ * BEDELİ ŞU: makine bir gün geri dönerse agent hâlâ kurulu olur ve anahtarı
+ * artık hiçbir satırla eşleşmez — her gönderimde 401 alıp yerelde spool eder.
+ * O yüzden çağıran taraf bunu yalnızca çevrimdışı cihazlarda öneriyor ve
+ * kullanıcıya `uninstall.sh`'ten söz ediyor.
+ *
+ * Yetki tarafı: RLS `del_devices` politikası (`account_id = auth.uid()`) izin
+ * veriyor, FK'ler `ON DELETE CASCADE` olduğu için metrik/log/çöküş/komut
+ * satırları da veritabanı tarafından siliniyor — burada tek bir DELETE var.
+ */
+export async function forceRemoveDevice(id: string): Promise<void> {
+  const { error } = await supabase().from("devices").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* --- Envanter (Inventory sayfası) ---------------------------------------- */
+
+/**
+ * Cihazın DEĞİŞMEYEN künyesi — kabuğun 10 saniyede bir çektiği listede yok.
+ *
+ * `LIST_COLUMNS` bilerek dar: o sorgu her 10 saniyede bir koşuyor ve cpu_model,
+ * kernel_version, gpu_model gibi ayda bir değişen alanları her turda indirmek
+ * saf israf olurdu. Envanter sayfası ise TAM olarak o alanlar için var, o
+ * yüzden kendi sorgusunu bir kez açıyor.
+ */
+export type InventoryDevice = Device & {
+  cpu_model: string | null;
+  cpu_cores_physical: number | null;
+  kernel_version: string | null;
+  gpu_model: string | null;
+  external_ip: string | null;
+  enabled_addons: string[];
+};
+
+/**
+ * Hesabın tüm cihazlarının envanteri, tek sorguda.
+ *
+ * Cihaz başına `fetchDevice` çağırmak N+1 olurdu; burada aynı DETAIL_COLUMNS
+ * kümesi tek seferde, `id` filtresi olmadan çekiliyor — RLS zaten hesabın
+ * dışına çıkmayı engelliyor.
+ */
+export async function fetchInventory(): Promise<InventoryDevice[]> {
+  const client = supabase();
+
+  const devicesQuery = client
+    .from("devices")
+    .select(DETAIL_COLUMNS)
+    .order("measured_at", { referencedTable: "metrics", ascending: false })
+    .limit(1, { referencedTable: "metrics" })
+    .order("device_name");
+
+  // Durum rozeti için: silme bekleyen cihaz "Deleting" görünmeli (§9.3'ün
+  // dört hâli). Rozeti atlayıp yalnızca künyeyi göstermek, envanterde artık
+  // var olmayacak bir makineyi hâlâ envanterdeymiş gibi listelemek olurdu.
+  const commandsQuery = client
+    .from("commands")
+    .select("device_id")
+    .eq("type", "delete")
+    .eq("status", "pending");
+
+  const [devices, commands] = await Promise.all([devicesQuery, commandsQuery]);
+
+  if (devices.error) throw devices.error;
+  if (commands.error) throw commands.error;
+
+  const pending = new Set((commands.data ?? []).map((c) => c.device_id));
+
+  return (devices.data as unknown as (DeviceRow &
+    Omit<InventoryDevice, keyof Device>)[]).map(({ metrics, ...device }) => ({
+    ...device,
+    latest: metrics[0] ?? null,
+    deletePending: pending.has(device.id),
+  }));
 }

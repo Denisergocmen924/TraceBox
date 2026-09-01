@@ -19,6 +19,13 @@ export type LogLevel = "info" | "warning" | "error" | "critical";
 
 export type LogRow = {
   id: string;
+  /**
+   * Satırın hangi makineden geldiği. Cihaz detayında gereksiz (zaten tek bir
+   * makineye bakılıyor) ama hesap genelindeki Logs sayfasında satırın en
+   * önemli sütunu: kaynağı yazmayan bir akış, birbirine karışmış iki makinenin
+   * loglarını tek bir makinenin logu gibi gösterirdi.
+   */
+  device_id: string;
   measured_at: string;
   level: LogLevel;
   message: string;
@@ -27,36 +34,59 @@ export type LogRow = {
 
 /* --- Kullanıcıya gösterilen aralıklar (§9.5) ------------------------------ */
 
-export type RangeKey = "24h" | "2d" | "5d" | "7d" | "10d";
+export type RangeKey = "1h" | "24h" | "2d" | "5d" | "7d" | "10d";
 
+/**
+ * §9.5'in listesine "son 1 saat" EKLENDİ. Sebep referans 2: üst çubuktaki
+ * seçici görselde "Last 1 hour" yazıyor ve System Metrics grafiği bir saatlik
+ * bir pencere çiziyor. Ekleme §9.5 ile çelişmiyor — o madde en UZUN pencereyi
+ * (10 gün, retention ile aynı) ve blok mantığını kilitliyor; daha kısa bir
+ * pencere blok aritmetiğini değiştirmiyor, yalnızca tek bloğun içinden daha
+ * dar bir dilim kesiyor.
+ */
 export const RANGES: { key: RangeKey; label: string; seconds: number }[] = [
-  { key: "24h", label: "24 saat", seconds: 24 * 3600 },
-  { key: "2d", label: "2 gün", seconds: 2 * 86400 },
-  { key: "5d", label: "5 gün", seconds: 5 * 86400 },
-  { key: "7d", label: "1 hafta", seconds: 7 * 86400 },
-  { key: "10d", label: "10 gün", seconds: 10 * 86400 },
+  { key: "1h", label: "1 hour", seconds: 3600 },
+  { key: "24h", label: "24 hours", seconds: 24 * 3600 },
+  { key: "2d", label: "2 days", seconds: 2 * 86400 },
+  { key: "5d", label: "5 days", seconds: 5 * 86400 },
+  { key: "7d", label: "1 week", seconds: 7 * 86400 },
+  { key: "10d", label: "10 days", seconds: 10 * 86400 },
 ];
 
 /* --- Seviye süzgeci ------------------------------------------------------- */
 
 /**
- * Süzgeç bir EŞİKTİR, tam eşleşme değil: "warning" seçildiğinde error ve
- * critical de listede kalır. Aksi hâlde "warning" filtresi bir error'ı
- * gizlerdi — kullanıcı sorunları arıyorken en ciddi satırı saklamak,
- * süzgecin var oluş amacına ters.
+ * Süzgeç TAM EŞLEŞMEDİR: "warning" seçildiğinde yalnızca warning satırları
+ * kalır.
+ *
+ * Önceki hâli bir EŞİKTİ — "warning" error ve critical'ı da içeriyordu, düğme
+ * de bunu `warning+` diye duyuruyordu. Gerekçesi savunulabilirdi (kullanıcı
+ * sorun ararken en ciddi satırı gizlememek), ama kullanıcı testinde tam da
+ * korkulan yanlış anlama çıktı: "warning ve error beraber warning adı altında
+ * listeleniyor". Etiketteki artı işareti okunmadı; okunsaydı bile bir seviyeyi
+ * tek başına görmenin yolu yoktu. `logs.level` dört ayrı değer taşıyorsa
+ * süzgeç de dört ayrı seçenek sunmalı.
+ *
+ * Bedeli açık: "tüm sorunlar" diye tek bir görünüm artık yok — warning ve
+ * error'a aynı anda bakmak için `all` gerekiyor. Bu bilinçli bir takas;
+ * karşılığında hiçbir düğme sessizce başka bir seviyeyi içeri almıyor.
  */
-export type LevelFilter = "all" | "warning" | "error";
+export type LevelFilter = "all" | LogLevel;
 
-export const LEVELS_AT_OR_ABOVE: Record<LevelFilter, LogLevel[]> = {
+export const FILTER_LEVELS: Record<LevelFilter, LogLevel[]> = {
   all: ["info", "warning", "error", "critical"],
-  warning: ["warning", "error", "critical"],
-  error: ["error", "critical"],
+  info: ["info"],
+  warning: ["warning"],
+  error: ["error"],
+  critical: ["critical"],
 };
 
 export const LEVEL_FILTER_LABEL: Record<LevelFilter, string> = {
-  all: "hepsi",
-  warning: "warning+",
-  error: "error+",
+  all: "all",
+  info: "info",
+  warning: "warning",
+  error: "error",
+  critical: "critical",
 };
 
 /* --- Blok aritmetiği ------------------------------------------------------ */
@@ -73,17 +103,21 @@ export function blockStart(key: string): number {
 }
 
 /**
- * Aralığı kapsayan blok anahtarları, YENİDEN ESKİYE.
+ * Pencereyi kapsayan blok anahtarları, YENİDEN ESKİYE.
  *
  * "Son 24 saat" ile "bugünün bloğu" aynı şey değildir: saat 09:00'da bugünün
  * bloğu 9 saatliktir, dolayısıyla dünün bloğu da gerekir. Aynı sebeple
- * "son 2 gün" 3 blok indirir ve en eski bloğun kenarı kırpılır (§9.5).
+ * "son 2 gün" 3 blok indirir ve UÇ bloklarının kenarı kırpılır (§9.5).
+ *
+ * İki ucu da parametre almasının sebebi yakınlaştırma (§9.8): grafikte seçilen
+ * pencerenin sağ ucu artık "şu an" olmak zorunda değil. Tek bir süre alsaydı
+ * dünün 14:00–14:05 aralığına yakınlaşan kullanıcıya o andan bugüne kadarki
+ * tüm loglar inerdi.
  */
-export function blocksForRange(now: number, seconds: number): string[] {
-  const start = now - seconds * 1000;
+export function blocksForWindow(fromMs: number, toMs: number): string[] {
   const keys: string[] = [];
-  let day = blockStart(blockKey(now));
-  while (day + DAY_MS > start) {
+  let day = blockStart(blockKey(toMs));
+  while (day + DAY_MS > fromMs) {
     keys.push(blockKey(day));
     day -= DAY_MS;
   }
@@ -100,31 +134,51 @@ export function blocksForRange(now: number, seconds: number): string[] {
 export const LOG_PAGE_SIZE = 200;
 
 export async function fetchLogPage(params: {
-  deviceId: string;
+  /**
+   * `null` = hesabın TÜM cihazları (Logs sayfası). Filtre yazılmadığında
+   * RLS'in kendi `account_id = auth.uid()` kuralı devrede kalıyor, yani
+   * kapsam yine hesapla sınırlı — sorgu güvenliği kaybetmiyor, yalnızca
+   * daraltmayı bırakıyor.
+   */
+  deviceId: string | null;
   block: string;
   level: LevelFilter;
   offset: number;
-  rangeStartMs: number;
+  windowFromMs: number;
+  windowToMs: number;
+  /**
+   * Bir sayfada kaç satır. Yalnızca ATILMIŞ bir bloğu geri getirirken
+   * veriliyor (§9.5): blok bellekten düşerken kaç satırı olduğu biliniyor,
+   * dolayısıyla geri dönüşte aynı sayı tek istekte çekilebiliyor. Sayfa sayfa
+   * yeniden yüklenseydi bloğun yüksekliği adım adım büyür ve kullanıcının
+   * altında duran içerik her adımda kayardı.
+   */
+  limit?: number;
 }): Promise<{ rows: LogRow[]; blockDone: boolean }> {
-  const { deviceId, block, level, offset, rangeStartMs } = params;
+  const { deviceId, block, level, offset, windowFromMs, windowToMs } = params;
+  const size = params.limit ?? LOG_PAGE_SIZE;
 
-  // Alt sınır: bloğun başı ile aralığın başından HANGİSİ SONRAYSA o. En eski
-  // bloğun kenarını kırpan yer burası.
-  const from = Math.max(blockStart(block), rangeStartMs);
-  const to = blockStart(block) + DAY_MS;
+  // Bloğun kendi sınırları ile pencerenin sınırlarının KESİŞİMİ. Uç blokların
+  // kenarını kırpan yer burası: "son 2 gün"de en eski bloğun başı, grafikte
+  // yakınlaşıldığında ise iki uç birden kırpılıyor.
+  const from = Math.max(blockStart(block), windowFromMs);
+  const to = Math.min(blockStart(block) + DAY_MS, windowToMs);
 
-  const { data, error } = await supabase()
+  let query = supabase()
     .from("logs")
-    .select("id, measured_at, level, message, source")
-    .eq("device_id", deviceId)
-    .in("level", LEVELS_AT_OR_ABOVE[level])
+    .select("id, device_id, measured_at, level, message, source");
+
+  if (deviceId) query = query.eq("device_id", deviceId);
+
+  const { data, error } = await query
+    .in("level", FILTER_LEVELS[level])
     .gte("measured_at", new Date(from).toISOString())
     .lt("measured_at", new Date(to).toISOString())
     .order("measured_at", { ascending: false })
-    .range(offset, offset + LOG_PAGE_SIZE - 1);
+    .range(offset, offset + size - 1);
 
   if (error) throw error;
 
   const rows = (data ?? []) as LogRow[];
-  return { rows, blockDone: rows.length < LOG_PAGE_SIZE };
+  return { rows, blockDone: rows.length < size };
 }
