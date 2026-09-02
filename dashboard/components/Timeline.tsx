@@ -32,9 +32,22 @@
  * (CrashMarkers); aynı x eksenini paylaşıyorlar, yani bir işaret ile altındaki
  * sıçrama aynı dikey hizada.
  *
- * BU DİLİMDE YOK, bilerek: canlı akış (§9.9) yalnızca log listesinde. Grafiğin
- * penceresi sabitlenmiş durumda (appState'teki `anchor`); saniyede bir kayan
- * bir eksen üzerinde sürükleyerek seçim yapmak imkânsız olurdu.
+ * CANLI AKIŞ (§9.9) artık burada da var, ama grafiğin ihtiyacına göre: kenar
+ * her saniye değil, bir KOVA genişliğinde bir adımla ilerliyor (appState →
+ * canlı kenar) ve sürükleme başladığı anda tamamen DONUYOR. Eksenin altından
+ * kaymadığı için seçim yapmak hâlâ mümkün — bu dilimden önce canlı akışın
+ * grafiğe girmemesinin sebebi tam olarak buydu.
+ *
+ * Akış YAKINLAŞTIRILMIŞ hâlde de sürüyor; durduran tek şey üst çubuktaki
+ * kilit. Yakınlaşmayı ölçüt yapan eski kural iki farklı niyeti aynı kefeye
+ * koyuyordu: "şu ana daha yakından bak" ile "geçmişte şu ana bak". İkincisini
+ * appState'in kendisi tanıyor (sağ uca değmeyen seçim kilidi kapatıyor), yani
+ * kullanıcı geçmişi incelerken de ekranı kaybetmiyor, canlıya bakarken de
+ * yakınlaşabiliyor.
+ *
+ * Yeni veri geldiğinde kovalar SUNUCUDAN yeniden çekiliyor, tarayıcıda
+ * güncellenmiyor: seyreltme metrics_buckets'ta yaşıyor (§9.7) ve ikinci bir
+ * kopyasını buraya yazmak, iki hesabın zamanla ayrışması demekti.
  *
  * Bileşen `components/` altında, bir sayfanın yanında değil: hem cihaz detayı
  * hem Metrics sayfası aynı çizelgeyi gösteriyor.
@@ -44,6 +57,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/appState";
+import { LiveLock } from "./LiveLock";
 import {
   BUCKET_COUNT,
   bucketWidthMs,
@@ -54,6 +68,7 @@ import {
   hardwareTracks,
   nearestIndex,
   networkTracks,
+  plotEndMs,
   tracksCeiling,
   type MetricBucket,
 } from "@/lib/metrics";
@@ -106,8 +121,17 @@ export function Timeline({
       kayıtları cihazın kendi sayfasında, tam ayrıntısıyla duruyor. */
   showCrashes?: boolean;
 }) {
-  const { timeWindow, zoomDepth, zoomTo, zoomBack, zoomReset, reloadNonce } =
-    useApp();
+  const {
+    timeWindow,
+    zoomDepth,
+    locked,
+    zoomTo,
+    zoomBack,
+    zoomReset,
+    reloadNonce,
+    liveConnected,
+    holdLive,
+  } = useApp();
 
   const [buckets, setBuckets] = useState<MetricBucket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,12 +154,39 @@ export function Timeline({
    */
   const epoch = useRef(0);
 
+  /**
+   * Bir önceki çekimin kimliği — "pencere değişti mi, yoksa canlı kenar mı
+   * kaydı?" sorusunu ayırt etmek için.
+   *
+   * Ayrım şart: kenar dakikada birkaç kez ilerliyor ve her ilerlemede
+   * yükleniyor iskeletini göstermek, kullanıcı hiçbir şey yapmadığı hâlde
+   * grafiği durmadan kırpıştırırdı. Aynı sebeple imlecin altındaki an da
+   * korunuyor — okunmakta olan bir ipucu kendi kendine kaybolmamalı.
+   */
+  const previous = useRef<{
+    deviceId: string;
+    span: number;
+    to: number;
+    nonce: number;
+  } | null>(null);
+
   useEffect(() => {
     epoch.current += 1;
     const mine = epoch.current;
 
-    setLoading(true);
-    setHoverTime(null);
+    const before = previous.current;
+    const silent =
+      before !== null &&
+      before.deviceId === deviceId &&
+      before.span === spanMs &&
+      before.nonce === reloadNonce &&
+      toMs > before.to;
+    previous.current = { deviceId, span: spanMs, to: toMs, nonce: reloadNonce };
+
+    if (!silent) {
+      setLoading(true);
+      setHoverTime(null);
+    }
 
     fetchBuckets({ deviceId, fromMs, toMs })
       .then((rows) => {
@@ -145,11 +196,20 @@ export function Timeline({
       })
       .catch((e: unknown) => {
         if (mine !== epoch.current) return;
+        /*
+         * Sessiz turda hata YUTULUYOR: kenar kendi kendine ilerledi, kullanıcı
+         * bir şey istemedi. Geçici bir ağ hatası yüzünden okunmakta olan
+         * grafiği silip yerine kırmızı bir satır koymak, kullanıcının kendi
+         * yapmadığı bir işlemin cezasını çekmesi olurdu. Bir sonraki tur
+         * zaten yeniden deniyor; gerçekten kopmuş bir bağlantıda WebSocket de
+         * düşeceği için "Live" rozeti sönüyor.
+         */
+        if (silent) return;
         setBuckets([]);
         setError(errorMessage(e));
       })
       .finally(() => {
-        if (mine === epoch.current) setLoading(false);
+        if (mine === epoch.current && !silent) setLoading(false);
       });
 
     if (!showCrashes) return;
@@ -161,7 +221,7 @@ export function Timeline({
      * kayıtlarına ihtiyaç yok; tersi de doğru. Aynı `epoch` bekçisini
      * paylaşıyorlar, çünkü ikisi de aynı pencereye ait.
      */
-    setCrashLoading(true);
+    if (!silent) setCrashLoading(true);
     fetchCrashSnapshots({ deviceId, fromMs, toMs })
       .then(({ rows, truncated }) => {
         if (mine !== epoch.current) return;
@@ -169,12 +229,12 @@ export function Timeline({
         setCrashTruncated(truncated);
       })
       .catch(() => {
-        if (mine !== epoch.current) return;
+        if (mine !== epoch.current || silent) return;
         setCrashes([]);
         setCrashTruncated(false);
       })
       .finally(() => {
-        if (mine === epoch.current) setCrashLoading(false);
+        if (mine === epoch.current && !silent) setCrashLoading(false);
       });
     /*
      * `reloadNonce` bağımlılıklarda: yenile düğmesi cihaz listesini
@@ -183,7 +243,7 @@ export function Timeline({
      * ediyordu. Sayaç yalnızca düğmeye basıldığında arttığı için kendi
      * başına gereksiz bir çekim de yaratmıyor.
      */
-  }, [deviceId, fromMs, toMs, showCrashes, reloadNonce]);
+  }, [deviceId, fromMs, toMs, spanMs, showCrashes, reloadNonce]);
 
   /* --- sürükleyerek seçme (§9.8) ---------------------------------------- */
 
@@ -206,6 +266,20 @@ export function Timeline({
   }, []);
 
   const dragging = drag !== null;
+
+  /*
+   * Seçim boyunca canlı kenar DONUYOR.
+   *
+   * Seçimin iki ucu mutlak zaman olarak tutuluyor, yani eksen kaysa bile
+   * sonuçta doğru aralık yakınlaşırdı — ama kullanıcı bunu göremezdi: çizdiği
+   * dikdörtgen parmağının altından sola kayardı. Tutamacı bırakmak temizlik
+   * fonksiyonunun işi; sürükleme nasıl biterse bitsin (fare bırakma, Escape,
+   * bileşenin sökülmesi) kenar mutlaka serbest kalıyor.
+   */
+  useEffect(() => {
+    if (!dragging) return;
+    return holdLive();
+  }, [dragging, holdLive]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -280,10 +354,19 @@ export function Timeline({
       ? "Memory is not plotted yet: this host has not reported its inventory, so the total is unknown."
       : null;
 
+  /**
+   * Eksenin sağ ucu — kural lib/metrics.ts'te, burada yalnızca çağrılıyor.
+   * Sayfadaki İKİ grafik de (ve ileride eklenecek her grafik) aynı yerde
+   * bitsin diye: uçları farklı olan grafikler, aynı eksende sanılırken yalan
+   * söylerdi.
+   */
+  const plotToMs = plotEndMs(toMs, spanMs, !locked);
+
   const shared = {
     buckets,
     fromMs,
     toMs,
+    plotToMs,
     hoverIndex,
     onHoverTime,
     dragFrom: drag?.from ?? null,
@@ -324,14 +407,19 @@ export function Timeline({
             the average
           </p>
         </div>
-        {hovered && (
-          <p className="ml-auto shrink-0 text-right text-xs tabular-nums">
-            <span className="text-fg">
-              {axisTime(Date.parse(hovered.bucket_start), spanMs)}
-            </span>
-            <span className="block text-faint">{hovered.samples} samples</span>
-          </p>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <LiveLock connected={liveConnected} />
+          {hovered && (
+            <p className="text-right text-xs tabular-nums">
+              <span className="text-fg">
+                {axisTime(Date.parse(hovered.bucket_start), spanMs)}
+              </span>
+              <span className="block text-faint">
+                {hovered.samples} samples
+              </span>
+            </p>
+          )}
+        </div>
       </header>
 
       {/*
@@ -385,6 +473,7 @@ export function Timeline({
           loading={crashLoading}
           fromMs={fromMs}
           toMs={toMs}
+          plotToMs={plotToMs}
         />
       )}
 

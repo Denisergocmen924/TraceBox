@@ -23,7 +23,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/appState";
 import { deviceStatus, type Device } from "@/lib/devices";
 import {
@@ -97,19 +97,50 @@ export default function OverviewPage() {
     };
   }, [hostFilter, reloadNonce]);
 
+  /**
+   * Bir önceki çekimin kimliği. Pencerenin sağ kenarı canlı olarak ilerliyor
+   * (appState → canlı kenar); her ilerlemede iskeleti geri getirmek, kullanıcı
+   * hiçbir şey yapmadığı hâlde paneli dakikada birkaç kez boşaltırdı. Yalnızca
+   * host, aralık genişliği ya da yenile düğmesi değiştiğinde iskelet var.
+   */
+  const previousFlush = useRef<{
+    host: string | null;
+    span: number;
+    to: number;
+    nonce: number;
+  } | null>(null);
+
   useEffect(() => {
     let alive = true;
-    setLoadingFlushes(true);
+
+    const before = previousFlush.current;
+    const silent =
+      before !== null &&
+      before.host === hostFilter &&
+      before.span === to - from &&
+      before.nonce === reloadNonce &&
+      to > before.to;
+    previousFlush.current = {
+      host: hostFilter,
+      span: to - from,
+      to,
+      nonce: reloadNonce,
+    };
+
+    if (!silent) setLoadingFlushes(true);
 
     fetchFlushEvents({ deviceId: hostFilter, fromMs: from, toMs: to })
       .then((next) => {
         if (alive) setFlushes(next);
       })
       .catch(() => {
-        if (alive) setFlushes(null);
+        // Sessiz turda elde olan liste korunuyor: kenar kendi kendine ilerledi,
+        // kullanıcı bir şey istemedi; geçici bir hata yüzünden paneli
+        // boşaltmak onun yapmadığı bir işlemin sonucu olurdu.
+        if (alive && !silent) setFlushes(null);
       })
       .finally(() => {
-        if (alive) setLoadingFlushes(false);
+        if (alive && !silent) setLoadingFlushes(false);
       });
 
     return () => {

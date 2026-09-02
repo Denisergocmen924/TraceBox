@@ -137,7 +137,20 @@ const TICK_STEPS_MS = [
  * pencereye bakan iki grafik farklı anlarda etiketlenir, kullanıcı ikisini
  * gözüyle hizalayamazdı.
  */
-export function axisTicks(fromMs: number, toMs: number, target = 5): number[] {
+export function axisTicks(
+  fromMs: number,
+  toMs: number,
+  /**
+   * Etiketlerin gerçekte nereye kadar üretileceği. Varsayılan `toMs`; grafiğin
+   * sağındaki boş pay (lib/metrics.ts → RIGHT_GUTTER) için daha ötesi verilir.
+   *
+   * ADIM yine `toMs`'e göre seçiliyor, buraya göre değil: pay hesaba katılsaydı
+   * 1 saatlik bir pencerede aralık 15 dakikadan 30'a çıkar, yani boş payın
+   * varlığı VERİNİN üstündeki eksenin sıklığını değiştirirdi.
+   */
+  untilMs = toMs,
+  target = 5,
+): number[] {
   const span = Math.max(1, toMs - fromMs);
   const step =
     TICK_STEPS_MS.find((s) => span / s <= target) ??
@@ -153,7 +166,7 @@ export function axisTicks(fromMs: number, toMs: number, target = 5): number[] {
   const out: number[] = [];
   for (
     let t = Math.ceil((fromMs - offset) / step) * step + offset;
-    t <= toMs;
+    t <= Math.max(toMs, untilMs);
     t += step
   ) {
     out.push(t);

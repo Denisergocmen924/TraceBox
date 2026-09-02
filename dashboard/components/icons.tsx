@@ -282,6 +282,30 @@ export function IconZoom(p: IconProps) {
   );
 }
 
+/**
+ * Kapalı asma kilit — üst çubuktaki kilit düğmesinin KAPALI hâli (§9.9).
+ * Kapağı gövdenin üstüne oturmuş; açık hâlden tek farkı bu, yani iki simge
+ * arasındaki geçiş tek bir parçanın yer değiştirmesi olarak okunuyor.
+ */
+export function IconLock(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="10.5" width="16" height="10" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </Svg>
+  );
+}
+
+/** Açık asma kilit — kilit düğmesinin AÇIK (canlı) hâli. Kapak sağa devrilmiş. */
+export function IconLockOpen(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="10.5" width="16" height="10" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 7.5-2" />
+    </Svg>
+  );
+}
+
 /* --- kenar çubuğu gezinme simgeleri (referans 2) --------------------------
  * Yedisi de aynı ailede: 24x24, 1.5 kalınlık, currentColor. Referanstaki
  * çizgi kalınlığı ve yuvarlaklık zaten bu ailenin değerleri; simge başına

@@ -497,6 +497,42 @@ function pointsFrom(
   return points;
 }
 
+/**
+ * Grafiğin SAĞINDA bırakılan boş pay — pencerenin oranı olarak.
+ *
+ * Çizgi ekranın tam sağ kenarında bitseydi canlı akış görünmezdi: yeni nokta
+ * hep aynı yerde, kenarın üstünde belirir ve grafik ilerlemiyormuş gibi
+ * dururdu. Pay sayesinde çizginin ucu ekranın içinde duruyor ve her yeni ölçüm
+ * onu görünür biçimde sağa doğru uzatıyor; pay dolunca pencere kayıyor ve uç
+ * yerine dönüyor.
+ *
+ * Üçte bir, yani ÇİZGİNİN UCU EKSENİN DÖRTTE ÜÇÜNDE duruyor (1 / (1 + 1/3)).
+ * İlk denemedeki %6 fazla dardı: uç hâlâ kenara yapışık görünüyordu ve
+ * ilerleme ancak bakarak fark ediliyordu. Dörtte üç, uca bir sonraki ölçümü
+ * beklemek için gözle görülür bir alan bırakıyor.
+ *
+ * Pay VERİ DEĞİL: sorgu hâlâ [from, to] aralığını istiyor, kovaların hiçbiri
+ * bu boşluğa harcanmıyor. Uzayan tek şey ekseni çizen koordinat sistemi.
+ */
+export const RIGHT_GUTTER = 1 / 3;
+
+/**
+ * Bir grafiğin x ekseninin SAĞ ucu — kural burada, çağıran tarafta değil.
+ *
+ * Her grafik payı kendi içinde hesaplasaydı ikisi er ya da geç ayrışırdı ve
+ * ileride eklenecek grafikler (eklenti ölçüleri, §9.13) payı hiç bilmeyebilirdi
+ * — aynı sayfada uçları farklı yerlerde biten grafikler, göz onları aynı
+ * eksende sanırken yalan söylerdi.
+ *
+ * Pay YALNIZCA canlıyken var. Canlıyken pencere — yakınlaştırılmış olsa bile —
+ * hep "şu an"da bitiyor, yani sağdaki boşluk gerçekten gelecek. Kilitliyken
+ * pencere donuk: aynı boşluk bu kez hiç dolmayacak bir yeri gösterir ve
+ * "burada ölçüm yok" demiş olurdu.
+ */
+export function plotEndMs(toMs: number, spanMs: number, live: boolean): number {
+  return live ? toMs + spanMs * RIGHT_GUTTER : toMs;
+}
+
 export function bucketWidthMs(fromMs: number, toMs: number, count: number): number {
   return Math.max(1, (toMs - fromMs) / count);
 }

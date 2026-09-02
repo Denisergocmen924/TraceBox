@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/appState";
+import { LiveLock } from "./LiveLock";
 import {
   FILTER_LEVELS,
   LEVEL_FILTER_LABEL,
@@ -162,7 +163,7 @@ export function LogList({
   /** Kaydırma kutusunun yüksekliği. Kendi sayfasında ekranın tamamı kadar. */
   scrollerClass?: string;
 }) {
-  const { timeWindow, zoomDepth, now } = useApp();
+  const { timeWindow, zoomDepth, locked, now } = useApp();
   const { from: fromMs, to: toMs } = timeWindow;
 
   const [level, setLevel] = useState<LevelFilter>("all");
@@ -173,7 +174,18 @@ export function LogList({
   const [liveRows, setLiveRows] = useState<LogRow[]>([]);
   const [connected, setConnected] = useState(false);
 
-  const keys = useMemo(() => blocksForWindow(fromMs, toMs), [fromMs, toMs]);
+  /*
+   * Blok anahtarları — 24 saatlik UTC blokları (§9.5).
+   *
+   * Bağımlılık dizi DEĞİL, dizinin METNİ. Kilit açıkken pencere saniyeler
+   * içinde kayıyor ve `blocksForWindow` her çağrıda YENİ bir dizi döndürüyor;
+   * kimliğe bağlanan aşağıdaki sıfırlama efekti, gün hiç değişmese bile her
+   * kaymada tetiklenir ve okunan liste kullanıcının altından silinirdi.
+   * Metin ise ancak gün kümesi gerçekten değiştiğinde (UTC gece yarısı ya da
+   * yeni bir aralık) başkalaşıyor.
+   */
+  const keySignature = blocksForWindow(fromMs, toMs).join(" ");
+  const keys = useMemo(() => keySignature.split(" "), [keySignature]);
 
   /*
    * Blokların ref kopyası. Yükleyici bir `while` döngüsü içinde art arda
@@ -389,11 +401,14 @@ export function LogList({
   /* --- canlı akış (§9.9) -------------------------------------------------- */
 
   /*
-   * Canlı akış YALNIZCA yakınlaştırma yokken. Yakınlaştırılmış bir pencere
-   * geçmişte bir anı inceliyor demektir (§9.8); oraya yeni satır akıtmak,
-   * kullanıcının çerçevelediği olayın üstüne alakasız veri yığmak olurdu.
+   * Canlı akışı yakınlaştırma değil, YALNIZCA kilit belirliyor — grafikteki
+   * kuralın aynısı (lib/appState.tsx). Yakınlaşmak tek başına "geçmişe
+   * bakıyorum" demek değil; geçmişe yapılan seçim zaten kilidi kendiliğinden
+   * kapatıyor. İki panel aynı bayrağa bakmasaydı §9.8'in tek aralık kuralı
+   * kırılırdı: grafik akarken donmuş bir log listesi, sıçramanın logunu hiç
+   * göstermezdi.
    */
-  const liveOn = zoomDepth === 0;
+  const liveOn = !locked;
 
   /** Ekrana basılmayı bekleyen satırlar. Saniyede bir boşaltılıyor. */
   const buffer = useRef<LogRow[]>([]);
@@ -477,17 +492,10 @@ export function LogList({
           </p>
         </div>
 
-        {/*
-          Canlı rozeti yalnızca kanal GERÇEKTEN kuruluyken yanıyor. "Live"
-          yazıp satır akıtmamak, kullanıcıya hiç log üretilmediğini söylemek
-          olurdu — oysa bağlantı kopmuş olabilir.
-        */}
-        {connected && (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-ok-soft px-2 py-1 text-[11px] font-semibold text-ok">
-            <span className="size-1.5 animate-pulse rounded-full bg-ok" />
-            Live
-          </span>
-        )}
+        {/* Kilit + rozet; grafikteki ikilinin aynısı (components/LiveLock.tsx).
+            Aynı bayrağı çeviriyorlar — Logs sayfasında grafik yok, kilit orada
+            da bir yerde bulunmak zorunda. */}
+        <LiveLock connected={connected} />
 
         {/*
           Süzgeç TAM EŞLEŞME: her düğme yalnızca kendi seviyesini gösterir

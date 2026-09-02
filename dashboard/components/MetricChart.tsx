@@ -51,6 +51,7 @@ export function MetricChart({
   note,
   fromMs,
   toMs,
+  plotToMs,
   hoverIndex,
   onHoverTime,
   dragFrom,
@@ -69,6 +70,14 @@ export function MetricChart({
   note?: string | null;
   fromMs: number;
   toMs: number;
+  /**
+   * Eksenin bittiği an — verinin bittiği an DEĞİL. Aradaki fark, sağda
+   * bırakılan boş pay (lib/metrics.ts → plotEndMs). Ayrı bir prop, çünkü payın
+   * uygulanıp uygulanmayacağı kilit durumuna bağlı ve onu bilen Timeline;
+   * çizim alanı hangi ölçüyü çizdiğini de, akışın açık olup olmadığını da
+   * bilmiyor.
+   */
+  plotToMs: number;
   hoverIndex: number | null;
   onHoverTime: (t: number | null) => void;
   /** Sürmekte olan seçim. Seçim yoksa null. */
@@ -77,14 +86,20 @@ export function MetricChart({
   onDragStart: (t: number) => void;
   onDragMove: (t: number) => void;
 }) {
+  /** Verinin genişliği — etiket sıklığı ve okuma bunun üstünden. */
   const span = Math.max(1, toMs - fromMs);
+  /** Çizim uzayının genişliği. Sağdaki boş pay yüzünden `span`'dan büyük. */
+  const viewSpan = Math.max(1, plotToMs - fromMs);
   const top = ceiling > 0 ? ceiling : 1;
 
-  const x = (t: number) => ((t - fromMs) / span) * VIEW_W;
+  const x = (t: number) => ((t - fromMs) / viewSpan) * VIEW_W;
   const y = (v: number) =>
     VIEW_H - (Math.min(Math.max(v, 0), top) / top) * VIEW_H;
 
-  const ticks = axisTicks(fromMs, toMs);
+  // Kılavuz çizgileri ve etiketler boş payın İÇİNE de sürüyor: ritim orada
+  // kesilseydi payın kendisi "eksen bitti" gibi okunurdu. Adım yine verinin
+  // genişliğinden seçiliyor (lib/time.ts → axisTicks).
+  const ticks = axisTicks(fromMs, toMs, plotToMs);
   const hovered = hoverIndex == null ? null : (buckets[hoverIndex] ?? null);
   const hoverX = hovered ? x(Date.parse(hovered.bucket_start)) : null;
 
@@ -92,7 +107,11 @@ export function MetricChart({
   function timeAt(event: React.MouseEvent<HTMLDivElement>): number {
     const box = event.currentTarget.getBoundingClientRect();
     const fraction = (event.clientX - box.left) / box.width;
-    return fromMs + Math.min(1, Math.max(0, fraction)) * span;
+    const t = fromMs + Math.min(1, Math.max(0, fraction)) * viewSpan;
+    // Boş paya taşan imleç VERİNİN SONUNA kırpılıyor. Kırpılmasaydı orada
+    // başlayan bir seçim, hiç ölçüm olmayan bir aralığı çerçeveler ve
+    // kullanıcı boş bir grafiğe yakınlaşırdı.
+    return Math.min(t, toMs);
   }
 
   function handleMove(event: React.MouseEvent<HTMLDivElement>) {
@@ -155,7 +174,7 @@ export function MetricChart({
               <span
                 key={t}
                 className="pointer-events-none absolute inset-y-0 border-l border-dashed border-line"
-                style={{ left: `${((t - fromMs) / span) * 100}%` }}
+                style={{ left: `${((t - fromMs) / viewSpan) * 100}%` }}
               />
             ))}
 
@@ -308,12 +327,12 @@ export function MetricChart({
           <div className="relative mt-2 h-4">
             {ticks
               // Sağ uca yapışan etiket kartın dışına taşardı.
-              .filter((t) => (t - fromMs) / span < 0.97)
+              .filter((t) => (t - fromMs) / viewSpan < 0.97)
               .map((t) => (
                 <span
                   key={t}
                   className="absolute -translate-x-1/2 whitespace-nowrap tabular-nums text-[11px] text-muted"
-                  style={{ left: `${((t - fromMs) / span) * 100}%` }}
+                  style={{ left: `${((t - fromMs) / viewSpan) * 100}%` }}
                 >
                   {axisTime(t, span)}
                 </span>

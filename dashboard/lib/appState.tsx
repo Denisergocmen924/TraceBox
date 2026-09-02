@@ -12,6 +12,14 @@
  * İki bileşen ayrı ayrı pencere tutsaydı bağ kurulamazdı; kullanıcı grafikte
  * bir sıçrama görüp loglara baktığında zaman damgalarını gözüyle eşleştirmek
  * zorunda kalırdı.
+ *
+ * Pencerenin CANLI KENARI da burada, aynı sebeple. Grafik kendi kenarını
+ * kaydırsaydı §9.8'in tek aralık kuralı kırılırdı: grafik son beş dakikayı
+ * gösterirken log listesi hâlâ sayfa açıldığı andaki pencerede kalırdı ve
+ * yakınlaştırma o kaymayı hesaba katmadan kırpardı. Kenar burada olduğu için
+ * sayfadaki HER panel aynı "şu an"a bakıyor ve tek bir abonelik yetiyor —
+ * grafik başına bir kanal açmak, Metrics sayfasında cihaz sayısı kadar
+ * WebSocket demekti.
  */
 "use client";
 
@@ -21,9 +29,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { fetchDevices, type Device } from "./devices";
+import { BUCKET_COUNT } from "./metrics";
+import { subscribeMetrics } from "./realtime";
 import { RANGES, type RangeKey } from "./logs";
 import { errorMessage } from "./errors";
 
@@ -37,6 +48,16 @@ import { errorMessage } from "./errors";
  * her cihaz için ayrı bir abonelik açmak gerekirdi.
  */
 const REFRESH_MS = 10_000;
+
+/**
+ * Canlı kenarın ilerleyebileceği en sık aralık — §9.9'un zorunlu kıldığı
+ * "ekran saniyede en fazla bir kez güncellenir" tavanı.
+ *
+ * Tek başına yeterli değil, alt sınır olarak kullanılıyor: asıl adım bir KOVA
+ * genişliği (aşağıda). Bir kovadan az kaydırmak grafiği değiştirmez — aynı
+ * resmi yeniden indirmek olurdu.
+ */
+const LIVE_TICK_MS = 1000;
 
 /** İncelenen zaman aralığı. İki ucu da mutlak an (epoch ms). */
 export type TimeWindow = { from: number; to: number };
@@ -52,6 +73,17 @@ export type TimeWindow = { from: number; to: number };
  * gönderdiği sayılar duruyor.
  */
 export const MIN_ZOOM_MS = 60_000;
+
+/**
+ * Sürükleyerek yapılan seçimin sağ ucu, pencerenin sağ ucuna "değmiş" sayıldığı
+ * pay — pencere genişliğinin oranı olarak.
+ *
+ * Tam eşitlik aramak fazla katı olurdu: canlı kalmak isteyen kullanıcının bir
+ * pikselle geride bıraktığı sürükleme sessizce kilitlenirdi. Yüzde iki, bir
+ * saatlik pencerede ~72 saniye — grafiğin sağ ucundaki boş paya (RIGHT_GUTTER)
+ * kadar sürükleyen herkesi kapsıyor.
+ */
+const LIVE_EDGE_TOLERANCE = 0.02;
 
 type AppValue = {
   devices: Device[] | null;
@@ -94,6 +126,39 @@ type AppValue = {
   zoomTo: (from: number, to: number) => void;
   zoomBack: () => void;
   zoomReset: () => void;
+  /**
+   * Metrik kanalı GERÇEKTEN kurulu mu (§9.6 madde 5). Grafikteki "Live"
+   * rozetini bu belirliyor: kanal koptuğunda rozeti yanık bırakmak,
+   * kullanıcıya makinenin veri üretmediğini söylemek olurdu.
+   */
+  liveConnected: boolean;
+  /**
+   * Canlı kenarı geçici olarak dondurur; dönen fonksiyon serbest bırakır.
+   *
+   * Sürükleyerek seçim (§9.8) için şart: seçim mutlak zamanla tutuluyor ama
+   * eksen kayınca aynı anın PİKSELİ kayar, yani kullanıcının çizdiği dikdörtgen
+   * parmağının altından kaçardı. Sayaç (tek bayrak değil) çünkü Metrics
+   * sayfasında birden çok grafik var ve biri bırakırken öteki hâlâ tutuyor
+   * olabilir.
+   */
+  holdLive: () => () => void;
+  /**
+   * Kilit. Açıkken (`false`) pencere CANLI: sağ ucu "şu an"da duruyor ve yeni
+   * veri geldikçe ilerliyor — yakınlaştırılmış hâlde bile. Kapalıyken (`true`)
+   * ekrandaki her şey donuyor: ne eksen kayıyor, ne log listesine satır
+   * düşüyor.
+   *
+   * Neden tek ve PAYLAŞILAN bir bayrak: §9.8 zaman aralığının tek olmasını
+   * istiyor. Grafik canlı akarken log listesi donuk kalsaydı ikisi aynı
+   * aralığa bakmayı bırakırdı ve grafikteki sıçramanın logu listede hiç
+   * görünmezdi.
+   *
+   * Değişmez kural: KİLİT AÇIKSA PENCERE "ŞU AN"DA BİTER. Geçmişte bir anı
+   * çerçeveleyen bir seçim kilidi kendiliğinden kapatıyor (`zoomTo`), kilidi
+   * elle açmak ise pencereyi genişliğini koruyarak bugüne getiriyor.
+   */
+  locked: boolean;
+  toggleLock: () => void;
 
   email: string;
   /**
@@ -144,72 +209,177 @@ export function AppProvider({
    */
   const [zoomStack, setZoomStack] = useState<TimeWindow[]>([]);
 
+  /**
+   * Pencerenin canlı sağ kenarı. `null` = kenar `anchor`da duruyor (henüz yeni
+   * veri gelmedi ya da canlı akış kapalı).
+   *
+   * Ayrı bir durum, `anchor`ın üzerine yazmak yerine: `anchor` kullanıcının
+   * SEÇTİĞİ an, kenar ise verinin getirdiği an. İkisini tek değişkende
+   * toplasaydık "sıfırla" nereye döneceğini bilemezdi.
+   */
+  const [liveEdge, setLiveEdge] = useState<number | null>(null);
+  const [liveConnected, setLiveConnected] = useState(false);
+
+  /**
+   * Kilit kapalı BAŞLAMIYOR: kara kutuya bakmanın varsayılan hâli "şu an ne
+   * oluyor" — donmuş bir ekranı kullanıcıya açtırtmak, ilk bakışta ürünün
+   * canlı olmadığını söylemek olurdu.
+   */
+  const [locked, setLocked] = useState(false);
+  const toggleLock = useCallback(() => setLocked((v) => !v), []);
+
+  // Zamanlayıcı kenarı state'ten okuyamaz (kurulduğu render'ın kopyasını
+  // görürdü); ref gerçeğin kaynağı, state yalnızca çizim kopyası.
+  const liveEdgeRef = useRef<number | null>(null);
+  const setEdge = useCallback((value: number | null) => {
+    liveEdgeRef.current = value;
+    setLiveEdge(value);
+  }, []);
+
+  /** Kenarı donduran açık tutamaç sayısı (bkz. `holdLive`). */
+  const holds = useRef(0);
+  const holdLive = useCallback(() => {
+    holds.current += 1;
+    let released = false;
+    // Aynı tutamacı iki kez bırakmak sayacı eksiye düşürür ve kenar bir daha
+    // hiç donmazdı; React efekt temizliğini iki kez çağırabiliyor.
+    return () => {
+      if (released) return;
+      released = true;
+      holds.current -= 1;
+    };
+  }, []);
+
   /** Hazır düğmelerin çizdiği pencere; yakınlaştırma bunun içinde yaşar. */
   const base = useMemo<TimeWindow>(() => {
     const seconds =
       RANGES.find((r) => r.key === range)?.seconds ?? RANGES[0].seconds;
-    return { from: anchor - seconds * 1000, to: anchor };
-  }, [range, anchor]);
+    // Pencere KAYIYOR, uzamıyor: iki uç birlikte ilerliyor. Yalnızca sağ ucu
+    // ilerletseydik "son 1 saat" düğmesi bir saat sonra iki saat gösterirdi.
+    const to = liveEdge ?? anchor;
+    return { from: to - seconds * 1000, to };
+  }, [range, anchor, liveEdge]);
+
+  /** Yığının tepesi — henüz canlı kenara göre kaydırılmamış hâli. */
+  const rawWindow =
+    zoomStack.length > 0 ? zoomStack[zoomStack.length - 1] : base;
 
   // Adı bilerek `timeWindow`: `window` global nesneyi gölgeler ve bu değeri
   // kullanan bileşenlerden biri (Timeline) window seviyesinde olay dinliyor.
-  const timeWindow =
-    zoomStack.length > 0 ? zoomStack[zoomStack.length - 1] : base;
+  const timeWindow = useMemo<TimeWindow>(() => {
+    // `base` zaten kenarda bitiyor (yukarıda `to = liveEdge ?? anchor`), yani
+    // kaydırılacak olan yalnızca YAKINLAŞTIRILMIŞ pencere. Kilitliyken kenar
+    // zaten ilerlemiyor.
+    if (locked || liveEdge === null || zoomStack.length === 0) return rawWindow;
+    /*
+     * Pencere KAYIYOR, uzamıyor — `base` ile aynı kural. Genişlik korunmasaydı
+     * kullanıcının seçtiği çözünürlük ekranda kendiliğinden değişirdi.
+     *
+     * Geriye kaydırma YOK: kilit uzun süre kapalı kaldıysa kenar bayatlamış
+     * olabilir ve negatif bir kaydırma pencereyi kimsenin istemediği bir
+     * geçmişe iterdi. Kenar ilk metrik haberinde tek adımda bugüne geliyor.
+     */
+    const shift = Math.max(0, liveEdge - rawWindow.to);
+    return shift === 0
+      ? rawWindow
+      : { from: rawWindow.from + shift, to: rawWindow.to + shift };
+  }, [rawWindow, locked, liveEdge, zoomStack.length]);
+
+  /**
+   * Ekranda GERÇEKTEN duran pencerenin ref kopyası.
+   *
+   * `zoomTo` bunu okuyor, state'i değil: kilit açıkken pencere saniyede bir
+   * kayıyor: callback ona bağımlı olsaydı her kaymada yeni bir kimlik alır ve
+   * sürüklemeyi dinleyen efekt de her saniye sökülüp yeniden takılırdı.
+   */
+  const windowRef = useRef(timeWindow);
+  windowRef.current = timeWindow;
 
   /**
    * Aralık değişince yığın BOŞALIR. Kaba ayar ince ayarı geçersiz kılar:
    * kullanıcı "10 gün"e bastığında 10 gün görmeyi bekler, iki gün önce
    * seçtiği üç dakikalık pencerenin içinden süzülmüş bir 10 günü değil.
    */
-  const setRange = useCallback((key: RangeKey) => {
-    setRangeState(key);
-    setAnchor(Date.now());
-    setZoomStack([]);
-  }, []);
-
-  const zoomTo = useCallback(
-    (from: number, to: number) => {
-      setZoomStack((stack) => {
-        const current = stack.length > 0 ? stack[stack.length - 1] : base;
-
-        // Sürükleme sağdan sola da yapılabilir; seçim yönü bir bilgi taşımıyor.
-        let lo = Math.max(Math.min(from, to), current.from);
-        let hi = Math.min(Math.max(from, to), current.to);
-
-        /*
-         * Çok dar seçim SESSİZCE KIRPILMAZ, merkezi korunarak genişletilir.
-         * Kırpmak kullanıcının işaret ettiği anı kaydırırdı; genişletmek onu
-         * ortada tutup yalnızca çerçeveyi büyütüyor — nişan alınan yer aynı
-         * kalıyor.
-         */
-        if (hi - lo < MIN_ZOOM_MS) {
-          const center = (lo + hi) / 2;
-          lo = center - MIN_ZOOM_MS / 2;
-          hi = center + MIN_ZOOM_MS / 2;
-          if (lo < current.from) {
-            lo = current.from;
-            hi = lo + MIN_ZOOM_MS;
-          }
-          if (hi > current.to) {
-            hi = current.to;
-            lo = hi - MIN_ZOOM_MS;
-          }
-        }
-
-        // Pencereyi daraltmayan bir seçim yığına girmemeli: "geri" düğmesi
-        // aynı görüntüye dönen boş bir adım biriktirirdi.
-        if (hi - lo >= current.to - current.from) return stack;
-        return [...stack, { from: lo, to: hi }];
-      });
+  const setRange = useCallback(
+    (key: RangeKey) => {
+      setRangeState(key);
+      setAnchor(Date.now());
+      setZoomStack([]);
+      // Kenar da sıfırlanır: yeni `anchor` zaten "şimdi", eski kenarı taşımak
+      // pencereyi geleceğe iterdi.
+      setEdge(null);
+      // Kilit de açılır: kaba ayara dönmek "baştan başla" demek ve kara
+      // kutunun baştan başlama hâli canlıdır. Kilitli kalsaydı kullanıcı yeni
+      // aralığı donmuş görür, sebebini de göremezdi — kilidi belki dakikalar
+      // önce, başka bir ekranda kapatmıştı.
+      setLocked(false);
     },
-    [base],
+    [setEdge],
   );
 
+  const zoomTo = useCallback((from: number, to: number) => {
+    const current = windowRef.current;
+    const span = current.to - current.from;
+
+    // Sürükleme sağdan sola da yapılabilir; seçim yönü bir bilgi taşımıyor.
+    let lo = Math.max(Math.min(from, to), current.from);
+    let hi = Math.min(Math.max(from, to), current.to);
+
+    /*
+     * SEÇİMİN SAĞ UCU KİLİDİ BELİRLER.
+     *
+     * Sağ uca değen bir seçim "şu ana yakınlaş" demektir — kullanıcı akmakta
+     * olan veriye bakıyor, yalnızca daha yakından. Geride bir yeri çerçeveleyen
+     * seçim ise "şu ana ne olduğuna bak" demektir; oraya yeni veri akıtmak,
+     * kullanıcının işaret ettiği olayı ekrandan kaydırırdı. İkinci hâlde kilit
+     * KENDİLİĞİNDEN kapanıyor ve üst çubuktaki düğme bunu gösteriyor: kilidi
+     * elle kapatmayı beklemek, kullanıcıya ihtiyacı olduğunu ancak seçimi
+     * kaçırdıktan sonra öğreteceği bir kural olurdu.
+     */
+    const atEdge = current.to - hi <= span * LIVE_EDGE_TOLERANCE;
+    // Pay kapatılıyor: kalsaydı yeni (ve çok daha dar) pencere ilk kaymada o
+    // payın tamamı kadar sıçrardı — 1 saatlik pencerede göze çarpmayan 72
+    // saniye, 2 dakikalık pencerede ekranın üçte biri eder.
+    if (atEdge) hi = current.to;
+
+    /*
+     * Çok dar seçim SESSİZCE KIRPILMAZ, merkezi korunarak genişletilir.
+     * Kırpmak kullanıcının işaret ettiği anı kaydırırdı; genişletmek onu
+     * ortada tutup yalnızca çerçeveyi büyütüyor — nişan alınan yer aynı
+     * kalıyor.
+     */
+    if (hi - lo < MIN_ZOOM_MS) {
+      const center = (lo + hi) / 2;
+      lo = center - MIN_ZOOM_MS / 2;
+      hi = center + MIN_ZOOM_MS / 2;
+      if (lo < current.from) {
+        lo = current.from;
+        hi = lo + MIN_ZOOM_MS;
+      }
+      if (hi > current.to) {
+        hi = current.to;
+        lo = hi - MIN_ZOOM_MS;
+      }
+    }
+
+    // Pencereyi daraltmayan bir seçim yığına girmemeli: "geri" düğmesi aynı
+    // görüntüye dönen boş bir adım biriktirirdi.
+    if (hi - lo >= span) return;
+    if (!atEdge) setLocked(true);
+    setZoomStack((stack) => [...stack, { from: lo, to: hi }]);
+  }, []);
+
   const zoomBack = useCallback(() => {
+    // Kilide DOKUNULMUYOR: "geri" bir adım geri almak demek, canlıya dönmek
+    // değil. Canlıya dönüş için kilit düğmesi ve "sıfırla" var.
     setZoomStack((stack) => stack.slice(0, -1));
   }, []);
 
-  const zoomReset = useCallback(() => setZoomStack([]), []);
+  const zoomReset = useCallback(() => {
+    setZoomStack([]);
+    // "Sıfırla" varsayılan görüntüye döner; varsayılan görüntü canlıdır.
+    setLocked(false);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -242,6 +412,78 @@ export function AppProvider({
     };
   }, [load]);
 
+  /* --- canlı kenar (§9.9) ------------------------------------------------ */
+
+  /**
+   * Canlı akışı yakınlaştırma değil, YALNIZCA kilit belirliyor.
+   *
+   * Eskiden kural `zoomStack.length === 0` idi: yakınlaşan kullanıcı canlıyı
+   * da kaybediyordu. Oysa yakınlaşmanın iki ayrı sebebi var — "şu ana daha
+   * yakından bak" ve "geçmişte şu ana bak" — ve ikincisini zaten `zoomTo`
+   * kendisi tanıyıp kilidi kapatıyor. Kilit tek ve GÖRÜNÜR bir anahtar olduğu
+   * için kullanıcı ekranın neden donduğunu da, nasıl çözüleceğini de görüyor.
+   */
+  const liveOn = !locked;
+
+  /** Ekrandaki aralığın genişliği — kova adımı bundan türüyor (aşağıda).
+      Pencere kaydıkça iki ucu birlikte ilerlediği için bu sayı DEĞİŞMİYOR;
+      efektin bağımlılığı olarak pencerenin kendisi yerine bunu kullanmak,
+      kenar her kaydığında aboneliğin sökülüp yeniden kurulmasını önlüyor. */
+  const spanMs = timeWindow.to - timeWindow.from;
+
+  useEffect(() => {
+    if (!liveOn) {
+      // Kenar SIFIRLANMIYOR, olduğu yerde bırakılıyor: yakınlaşmadan geri
+      // dönen kullanıcı, bıraktığı görüntüye dönmeli. Sıfırlansaydı "geri"
+      // düğmesi pencereyi sessizce geçmişe atardı — kullanıcının hiç
+      // istemediği bir kayma. Uzun bir incelemeden sonra kenar bayatlamış
+      // olabilir; ilk metrik haberinde tek adımda bugüne geliyor.
+      setLiveConnected(false);
+      return;
+    }
+
+    /*
+     * Realtime burada VERİ KAYNAĞI değil, HABERCİ: gelen satır okunmuyor bile,
+     * yalnızca "yeni bir şey var" bayrağı kalkıyor. Ekrandaki sayılar yine
+     * metrics_buckets'tan geliyor, yani seyreltme tek yerde kalıyor
+     * (lib/realtime.ts → subscribeMetrics).
+     *
+     * Bayrak, ilerletilemeyen turlarda DA duruyor: kenar donmuşken (sürükleme)
+     * ya da adım henüz dolmamışken gelen haber unutulsaydı, o veri bir sonraki
+     * satır gelene kadar ekrana hiç düşmezdi.
+     */
+    let pending = false;
+    const stop = subscribeMetrics({
+      onStatus: setLiveConnected,
+      onInsert: () => {
+        pending = true;
+      },
+    });
+
+    /*
+     * Adım = bir kova genişliği, en az bir saniye. Kovadan dar bir kayma
+     * grafikte tek bir pikseli bile değiştiremez; o kaymayı uygulamak aynı
+     * ~1000 noktayı yeniden indirmek olurdu. 1 saatlik pencerede kova 3,6
+     * saniye, 10 günlükte 14 dakika — yani uzak görünümde kenar seyrek
+     * ilerliyor, çünkü sık ilerlemesinin GÖRÜNÜR bir karşılığı yok.
+     */
+    const step = Math.max(LIVE_TICK_MS, spanMs / BUCKET_COUNT);
+
+    const timer = setInterval(() => {
+      if (!pending || holds.current > 0) return;
+      const at = Date.now();
+      const edge = liveEdgeRef.current;
+      if (edge !== null && at - edge < step) return;
+      pending = false;
+      setEdge(at);
+    }, LIVE_TICK_MS);
+
+    return () => {
+      stop();
+      clearInterval(timer);
+    };
+  }, [liveOn, spanMs, setEdge]);
+
   const value = useMemo<AppValue>(
     () => ({
       devices,
@@ -259,6 +501,10 @@ export function AppProvider({
       zoomTo,
       zoomBack,
       zoomReset,
+      liveConnected,
+      holdLive,
+      locked,
+      toggleLock,
       email,
       accountId,
     }),
@@ -277,6 +523,10 @@ export function AppProvider({
       zoomTo,
       zoomBack,
       zoomReset,
+      liveConnected,
+      holdLive,
+      locked,
+      toggleLock,
       email,
       accountId,
     ],

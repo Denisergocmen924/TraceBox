@@ -54,16 +54,21 @@ export function CrashMarkers({
   loading,
   fromMs,
   toMs,
+  plotToMs,
 }: {
   snapshots: CrashSnapshot[];
   truncated: boolean;
   loading: boolean;
   fromMs: number;
   toMs: number;
+  /** Eksenin bittiği an (grafikle AYNI değer) — bkz. MetricChart. Şerit ile
+      grafik aynı x eksenini paylaşıyor; biri payı uygulayıp öteki
+      uygulamasaydı işaretler altlarındaki sıçramadan kayardı. */
+  plotToMs: number;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const spanMs = Math.max(toMs - fromMs, 1);
+  const viewSpan = Math.max(plotToMs - fromMs, 1);
 
   /*
    * Pencere değişince seçim düşer. Düşmeseydi kullanıcı başka bir aralığa
@@ -101,7 +106,8 @@ export function CrashMarkers({
         <div className="absolute inset-x-0 bottom-0 h-px bg-line" />
 
         {snapshots.map((snapshot) => {
-          const fraction = (Date.parse(snapshot.measured_at) - fromMs) / spanMs;
+          const fraction =
+            (Date.parse(snapshot.measured_at) - fromMs) / viewSpan;
           /*
            * Pencere dışına düşen kayıt çizilmez: sorgunun aralığı ile ekranın
            * aralığı yakınlaştırma sırasında bir kare boyunca ayrışabiliyor
