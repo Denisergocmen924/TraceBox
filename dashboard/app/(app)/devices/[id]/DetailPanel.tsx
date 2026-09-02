@@ -31,6 +31,7 @@ import { queueCommand, type CommandType } from "@/lib/commands";
 import {
   deviceStatus,
   forceRemoveDevice,
+  isSilent,
   type DeviceDetail,
 } from "@/lib/devices";
 import { gb, localDateTime, relativeTime } from "@/lib/time";
@@ -93,6 +94,10 @@ export function DetailPanel({
   const { accountId, reload } = useApp();
   const router = useRouter();
   const status = deviceStatus(device, now);
+  // Durumdan AYRI: silme kuyruğa girince status "deleting" olur ama makine
+  // sessiz kalmaya devam eder. Aşağıdaki iki karar sessizliğe bakmalı,
+  // etikete değil (bkz. lib/devices.ts → isSilent).
+  const silent = isSilent(device, now);
 
   const [dialog, setDialog] = useState<Dialog>("none");
   const [busy, setBusy] = useState(false);
@@ -249,14 +254,14 @@ export function DetailPanel({
         */}
         {(togglePending || deletePending) && (
           <p className="pt-1 text-xs text-faint">
-            {status === "offline"
+            {silent
               ? "This host is offline. The command stays queued until the agent reconnects."
               : "The agent applies it on its next command poll (~10s)."}
           </p>
         )}
 
         {/*
-          ZORLA KALDIRMA — yalnızca cihaz ÇEVRİMDIŞIYKEN görünüyor (§9.13'te
+          ZORLA KALDIRMA — yalnızca makine SESSİZKEN görünüyor (§9.13'te
           açık kalan "nerede duracak" sorusunun cevabı).
 
           Çevrimiçi bir cihazda gösterilmiyor, çünkü orada zararlı: satır
@@ -265,8 +270,14 @@ export function DetailPanel({
           makinede doğru yol her zaman normal silme — agent kendini temizler.
           Buton ancak o yol İŞLEMEZ hâle geldiğinde, yani makine sessizken
           ortaya çıkıyor.
+
+          Ölçüt `status === "offline"` DEĞİL, `silent`: delete kuyruğa girince
+          status "deleting" oluyordu ve buton tam ihtiyaç anında kayboluyordu.
+          Hiç eşlenmemiş bir cihaza (last_seen null) silme emri verildiğinde
+          kaçış kapısı kalmıyordu — emri uygulayacak agent hiç var olmadığı
+          için kuyruk sonsuza kadar bekliyordu.
         */}
-        {status === "offline" && (
+        {silent && (
           <button
             onClick={() => {
               setError(null);

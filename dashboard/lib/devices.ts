@@ -75,14 +75,29 @@ export type DeviceStatus = "online" | "offline" | "paused" | "deleting";
  */
 export function deviceStatus(device: Device, now: number): DeviceStatus {
   if (device.deletePending) return "deleting";
-
-  const stale =
-    device.last_seen == null ||
-    now - Date.parse(device.last_seen) > OFFLINE_AFTER_SECONDS * 1000;
-  if (stale) return "offline";
-
+  if (isSilent(device, now)) return "offline";
   if (!device.logging_enabled) return "paused";
   return "online";
+}
+
+/**
+ * "Makine konuşmuyor mu?" — `deviceStatus`'tan AYRI durması gerekiyor.
+ *
+ * Durum tek bir etiket üretir ve `deleting` her şeyin üstündedir (yukarıdaki
+ * sıra). Ama sessizlik o etiketle birlikte kaybolmaz: silme emri verilmiş bir
+ * cihaz da sessiz OLABİLİR — hatta en sık o olur, çünkü ulaşılamayan makineye
+ * emir gönderip beklemek tam olarak kullanıcının sıkıştığı yerdir.
+ *
+ * Sessizliği yalnızca `status === "offline"` üzerinden okuyan arayüz, delete
+ * kuyruğa girdiği anda cihazı konuşuyor sayardı: force remove butonu kaybolur
+ * (tam ona ihtiyaç duyulan anda) ve "agent ~10 sn içinde uygular" yazısı hiç
+ * görülmemiş bir makine için çıkardı.
+ */
+export function isSilent(device: Device, now: number): boolean {
+  return (
+    device.last_seen == null ||
+    now - Date.parse(device.last_seen) > OFFLINE_AFTER_SECONDS * 1000
+  );
 }
 
 export const STATUS_LABEL: Record<DeviceStatus, string> = {
