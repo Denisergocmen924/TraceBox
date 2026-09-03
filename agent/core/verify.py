@@ -50,8 +50,8 @@ def verify(config) -> VerifyResult:
         return VerifyResult(
             ok=False,
             detail=(
-                f"collector'a ulaşılamadı ({type(error).__name__}) — "
-                f"collector_url doğru mu, makinenin internet erişimi var mı?"
+                f"could not reach the collector ({type(error).__name__}) — "
+                f"is collector_url correct, and does this machine have internet access?"
             ),
         )
 
@@ -62,14 +62,14 @@ def verify(config) -> VerifyResult:
         return VerifyResult(
             ok=False,
             detail=(
-                "cihaz anahtarı reddedildi (401) — config.toml'daki device_key, "
-                "dashboard'un verdiği anahtarla aynı mı?"
+                "device key rejected (401) — is device_key in config.toml the same "
+                "key the dashboard gave you?"
             ),
         )
 
     return VerifyResult(
         ok=False,
-        detail=f"collector beklenmeyen yanıt verdi (HTTP {response.status_code})",
+        detail=f"the collector returned an unexpected response (HTTP {response.status_code})",
     )
 
 
@@ -82,11 +82,11 @@ def _describe(response: httpx.Response) -> str:
     try:
         body = response.json()
     except ValueError:
-        return "bağlantı kuruldu"
+        return "connection established"
 
     if not isinstance(body, dict):
-        return "bağlantı kuruldu"
+        return "connection established"
 
     device_name = body.get("device_name") or "?"
     version = body.get("version") or "?"
-    return f"cihaz: {device_name} · collector sürümü: {version}"
+    return f"host: {device_name} · collector version: {version}"

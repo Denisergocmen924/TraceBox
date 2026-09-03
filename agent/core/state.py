@@ -103,7 +103,7 @@ class StateStore:
             with self._path.open("r", encoding="utf-8") as handle:
                 raw = json.load(handle)
             if not isinstance(raw, dict):
-                raise ValueError("state.json bir JSON nesnesi değil")
+                raise ValueError("state.json is not a JSON object")
         except (OSError, ValueError) as exc:
             self._quarantine(exc)
             return State()
@@ -163,7 +163,7 @@ class StateStore:
         """
         self._dir.mkdir(parents=True, exist_ok=True)
         self.deleted_marker_path.write_text(
-            f"{utc_now_iso()} delete komutu uygulandı\n", encoding="utf-8"
+            f"{utc_now_iso()} delete command applied\n", encoding="utf-8"
         )
         return self.deleted_marker_path
 
@@ -176,9 +176,9 @@ class StateStore:
         quarantine_path = self._path.with_name(f"{STATE_FILENAME}.corrupt")
         try:
             os.replace(self._path, quarantine_path)
-            self._warn(f"state.json okunamadı ({exc}); {quarantine_path} olarak saklandı.")
+            self._warn(f"could not read state.json ({exc}); kept as {quarantine_path}.")
         except OSError as move_error:
-            self._warn(f"state.json okunamadı ({exc}) ve taşınamadı ({move_error}).")
+            self._warn(f"could not read state.json ({exc}) and could not move it ({move_error}).")
 
 
 class SingleWriterLock:
@@ -209,7 +209,7 @@ class SingleWriterLock:
         except OSError:
             os.close(fd)
             raise RuntimeError(
-                f"başka bir agent süreci çalışıyor (kilit: {self._path})"
+                f"another agent process is running (lock: {self._path})"
             ) from None
 
         os.write(fd, f"{os.getpid()}\n".encode())

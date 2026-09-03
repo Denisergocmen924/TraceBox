@@ -89,13 +89,13 @@ class UserIdentity:
 # olmadığı, biçiminin doğru olup olmadığı dışarıya sızmaz.
 _UNAUTHORIZED_DEVICE = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Geçersiz cihaz anahtarı.",
+    detail="Invalid device key.",
     headers={"WWW-Authenticate": "Bearer"},
 )
 
 _UNAUTHORIZED_USER = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Geçersiz oturum.",
+    detail="Invalid session.",
     headers={"WWW-Authenticate": "Bearer"},
 )
 
@@ -177,7 +177,7 @@ class _JwksCache:
             key_set = PyJWKSet.from_dict(document)
         except (httpx.HTTPError, ValueError, PyJWTError) as error:
             # Adres loglanır (sır değil), yanıt gövdesi loglanmaz.
-            logger.error("JWKS çekilemedi (%s): %r", url, error)
+            logger.error("could not fetch JWKS (%s): %r", url, error)
             raise _JwksUnavailable(str(error)) from error
 
         # `kid` taşımayan anahtar eşleştirmede kullanılamaz, atlanır.
@@ -221,7 +221,7 @@ async def require_device(
     except SupabaseError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Doğrulama şu an yapılamıyor.",
+            detail="Authentication is temporarily unavailable.",
         ) from error
 
     # Satır sorgusu zaten hash eşitliğiyle yapıldı; karşılaştırma sabit süreli
@@ -264,7 +264,7 @@ async def require_user(
     except _JwksUnavailable as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Doğrulama şu an yapılamıyor.",
+            detail="Authentication is temporarily unavailable.",
         ) from error
 
     if key is None:

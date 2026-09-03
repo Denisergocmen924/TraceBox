@@ -72,14 +72,14 @@ class Config:
 
     # --- Zamanlama (saniye) ---
     collect_interval_seconds: int = 5
-    send_interval_seconds: int = 30
+    send_interval_seconds: int = 10
     command_poll_seconds: int = 10
 
     # --- Acil gönderim eşikleri (yüzde) ---
     flush_cpu_threshold: int = 90
     flush_ram_threshold: int = 90
     flush_disk_threshold: int = 95
-    flush_cooldown_seconds: int = 20
+    flush_cooldown_seconds: int = 10
 
     # --- Spool sınırları ---
     spool_max_age_days: int = 10
@@ -112,9 +112,8 @@ def check_permissions(path: Path, mode: int, *, warn) -> bool:
         return True
 
     warn(
-        f"{path} izinleri fazla açık ({stat.filemode(mode)}); cihaz anahtarını "
-        f"bu makinedeki başka kullanıcılar okuyabilir. Düzeltmek için: "
-        f"chmod 600 {path}"
+        f"permissions on {path} are too open ({stat.filemode(mode)}); other users "
+        f"on this machine can read the device key. To fix: chmod 600 {path}"
     )
     return False
 
@@ -131,9 +130,9 @@ def _positive_int(raw: dict, key: str, default: int) -> int:
 
     value = raw[key]
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ConfigError(f"'{key}' tam sayı olmalı, alınan: {value!r}")
+        raise ConfigError(f"'{key}' must be an integer, got: {value!r}")
     if value <= 0:
-        raise ConfigError(f"'{key}' sıfırdan büyük olmalı, alınan: {value}")
+        raise ConfigError(f"'{key}' must be greater than zero, got: {value}")
     return value
 
 
@@ -146,19 +145,19 @@ def _parse(raw: dict, *, warn) -> Config:
     for key in REQUIRED_KEYS:
         value = raw.get(key)
         if not isinstance(value, str) or not value.strip():
-            raise ConfigError(f"zorunlu alan eksik veya boş: '{key}'")
+            raise ConfigError(f"required field is missing or empty: '{key}'")
 
-    send_interval = _positive_int(raw, "send_interval_seconds", 30)
+    send_interval = _positive_int(raw, "send_interval_seconds", 10)
     if send_interval < MIN_SEND_INTERVAL_SECONDS:
         warn(
-            f"send_interval_seconds={send_interval} alt sınırın altında; "
-            f"{MIN_SEND_INTERVAL_SECONDS} kullanılıyor."
+            f"send_interval_seconds={send_interval} is below the minimum; "
+            f"using {MIN_SEND_INTERVAL_SECONDS} instead."
         )
         send_interval = MIN_SEND_INTERVAL_SECONDS
 
     addons = raw.get("enabled_addons", [])
     if not isinstance(addons, list) or not all(isinstance(a, str) for a in addons):
-        raise ConfigError("'enabled_addons' string listesi olmalı")
+        raise ConfigError("'enabled_addons' must be a list of strings")
 
     # Tanınmayan ad HATA DEĞİL, uyarıdır: yazım hatası yüzünden agent'ı
     # başlatmamak, bir eklentinin toplanmamasından daha ağır bir sonuç olurdu.
@@ -167,8 +166,8 @@ def _parse(raw: dict, *, warn) -> Config:
     unknown = [name for name in addons if name not in KNOWN_ADDONS]
     if unknown:
         warn(
-            f"enabled_addons içinde tanınmayan ad: {', '.join(unknown)} — "
-            f"yok sayılıyor. Geçerli değerler: {', '.join(KNOWN_ADDONS)}"
+            f"unknown name in enabled_addons: {', '.join(unknown)} — ignored. "
+            f"Valid values: {', '.join(KNOWN_ADDONS)}"
         )
 
     return Config(
@@ -180,7 +179,7 @@ def _parse(raw: dict, *, warn) -> Config:
         flush_cpu_threshold=_positive_int(raw, "flush_cpu_threshold", 90),
         flush_ram_threshold=_positive_int(raw, "flush_ram_threshold", 90),
         flush_disk_threshold=_positive_int(raw, "flush_disk_threshold", 95),
-        flush_cooldown_seconds=_positive_int(raw, "flush_cooldown_seconds", 20),
+        flush_cooldown_seconds=_positive_int(raw, "flush_cooldown_seconds", 10),
         spool_max_age_days=_positive_int(raw, "spool_max_age_days", 10),
         spool_max_size_mb=_positive_int(raw, "spool_max_size_mb", 200),
         enabled_addons=tuple(addons),
@@ -236,8 +235,8 @@ class ConfigLoader:
 
         except (OSError, tomllib.TOMLDecodeError, ConfigError) as exc:
             if self._cached is None:
-                raise ConfigError(f"{self._path} okunamadı: {exc}") from exc
-            self._warn(f"config yeniden okunamadı ({exc}); önceki ayarlar sürüyor.")
+                raise ConfigError(f"could not read {self._path}: {exc}") from exc
+            self._warn(f"could not re-read config ({exc}); keeping the previous settings.")
             return self._cached
 
         self._cached = config

@@ -1,190 +1,190 @@
 # TraceBox
 
-**Uzaktan log-shipping ve monitoring** — başına ne geldiğini anlatacak kadar hayatta kalamayabilecek makineler için.
+**Remote log-shipping and monitoring** — for machines that may not survive long enough to tell you what happened to them.
 
-İzlenen her makinede küçük bir **agent** çalışır. Bu agent makinenin metriklerini (CPU, RAM, disk, ağ) ve system log'larını sürekli toplar ve makine çökmeden **önce** buluta gönderir. Makine erişilemez hale geldiğinde, çöküşe kadar olan olaylar çoktan başka bir yerdedir — herhangi bir tarayıcıdan okunabilir.
+A small **agent** runs on every monitored machine. It continuously collects the machine's metrics (CPU, RAM, disk, network) and system logs and ships them to the cloud **before** the machine goes down. By the time the machine becomes unreachable, the events leading up to the crash are already somewhere else — readable from any browser.
 
-Uçağın kara kutusu gibi: son ana kadar kaydeder ve çöküşün ulaşamayacağı yerde durur.
-
----
-
-## Neden böyle çalışıyor?
-
-Akla ilk gelen kurgu şudur: *"log'ları bulutta saklayalım."* Ama asıl sorun saklamak değil, **olay hâlâ olurken veriyi makinenin dışına taşımak.**
-
-Bir makine çöktüğü *sırada* son durumunu upload etmeye çalışıyorsa, iş zaten bitmiştir: arızalanan şey genellikle network stack'in, disk'in ya da process'in ta kendisidir. Yani "çökerken haber ver" mantığı, tam da haber verecek mekanizmanın bozulduğu anda devreye girer.
-
-TraceBox bunu tersine çevirir:
-
-- **Sürekli ship eder.** Veri normal zamanlarda, hiçbir sorun yokken akmaya devam eder.
-- **Threshold aşılınca daha sıkı ship eder.** CPU %90'ı geçtiğinde sıradaki gönderim zamanı beklenmez; spool anında boşaltılır (emergency flush).
-- **Makine öldüğünde**, ilgilenilen veri çoktan dışarı çıkmıştır.
+Like an aircraft's black box: it records up to the last moment, and it sits where the crash cannot reach it.
 
 ---
 
-## Genel tablo
+## Why it works this way
+
+The obvious design is *"let's store the logs in the cloud."* But the hard part is not storing them — it is **getting the data off the machine while the event is still happening.**
+
+If a machine tries to upload its final state *while* it is going down, it is already too late: the thing that is failing is usually the network stack, the disk, or the process itself. "Report it as you crash" kicks in at exactly the moment the reporting mechanism is broken.
+
+TraceBox inverts that:
+
+- **It ships continuously.** Data keeps flowing in normal times, when nothing is wrong.
+- **It ships harder when a threshold is crossed.** Past 90% CPU it does not wait for the next scheduled send; the spool is emptied immediately (emergency flush).
+- **When the machine dies**, the data you care about is already outside.
+
+---
+
+## The big picture
 
 ```mermaid
 flowchart LR
-    subgraph machine["İzlenen makine"]
+    subgraph machine["Monitored machine"]
         direction TB
         agent["Agent<br/>Python + systemd"]
         spool[("spool<br/>SQLite / disk")]
-        agent -->|"her ölçüm önce diske"| spool
-        spool -->|"batch olarak oku"| agent
+        agent -->|"every sample hits disk first"| spool
+        spool -->|"read as a batch"| agent
     end
 
     collector["Collector<br/>FastAPI @ Fly.io"]
     postgres[("Postgres<br/>@ Supabase")]
     dashboard["Dashboard<br/>Next.js"]
-    user(["Kullanıcı<br/>tarayıcı"])
+    user(["User<br/>browser"])
 
     agent ==>|"POST /ingest<br/>device key + TLS"| collector
     collector ==>|"INSERT<br/>service key"| postgres
-    collector -.->|"komut yanıtı<br/>pause · resume · delete"| agent
+    collector -.->|"command response<br/>pause · resume · delete"| agent
     postgres -->|"SELECT<br/>user JWT + RLS"| dashboard
     dashboard --> user
 ```
 
-Sistemde **iki ayrı yol** var ve bunlar bilerek hiç kesişmiyor:
+There are **two separate paths** in the system, and they deliberately never cross:
 
-| Yol | Kim | Nereden geçer | Hangi kimlikle |
+| Path | Who | Goes through | With which identity |
 |---|---|---|---|
-| **WRITE** (yazma) | Agent | Collector üzerinden | `device key` — cihaz başına, tek tek revoke edilebilir |
-| **READ** (okuma) | Dashboard | Doğrudan Postgres'ten | `user JWT` — RLS ile satır bazında korunur |
+| **WRITE** | Agent | The collector | `device key` — one per host, revocable one by one |
+| **READ** | Dashboard | Postgres directly | `user JWT` — protected row by row through RLS |
 
-Agent database'e **asla doğrudan dokunmaz**; database'in service key'i **yalnızca collector'da** durur. Dashboard ise yazmaz, sadece okur.
+The agent **never touches the database directly**; the database's service key lives **only in the collector**. The dashboard does not write at all — it only reads.
 
 ---
 
-## Kullanılan teknolojiler
+## Technology used
 
-| Bileşen | Stack | Nerede çalışır | Rolü |
+| Component | Stack | Where it runs | Role |
 |---|---|---|---|
-| **Agent** | Python 3.11+, `psutil`, `httpx`, SQLite | İzlenen makine, `systemd` service olarak | Toplar, disk'e spool eder, ship eder. Unprivileged bir kullanıcı ile çalışır. |
-| **Collector** | Python, FastAPI, Docker | Fly.io | Sistemin tek yazma kapısı. Cihaz kimliğini key hash'inden çözer. |
-| **Database** | PostgreSQL | Supabase | Depolama + Auth + Row-Level Security + `pg_cron` ile retention. |
-| **Dashboard** | Next.js, Tailwind CSS | Vercel | Salt-okunur pencere. Postgres ile doğrudan konuşur. |
+| **Agent** | Python 3.11+, `psutil`, `httpx`, SQLite | The monitored machine, as a `systemd` service | Collects, spools to disk, ships. Runs as an unprivileged user. |
+| **Collector** | Python, FastAPI, Docker | Fly.io | The system's only write gate. Resolves the host identity from a key hash. |
+| **Database** | PostgreSQL | Supabase | Storage + Auth + Row-Level Security + retention via `pg_cron`. |
+| **Dashboard** | Next.js, Tailwind CSS | Fly.io | A read-only window. Talks to Postgres directly. |
 
 ---
 
-## İstekler nereye gidiyor?
+## Where do the requests go?
 
-Collector'ın tüm endpoint'leri ve kimleri kabul ettiği:
+Every endpoint the collector exposes, and who it accepts:
 
-| Kim → Kime | Endpoint | Kimlik | Ne yapar |
+| Who → whom | Endpoint | Identity | What it does |
 |---|---|---|---|
-| Agent → Collector | `POST /inventory` | device key | Makinenin künyesini `devices` satırının üzerine yazar |
-| Agent → Collector | `POST /ingest` | device key | metric / log / crash kayıtlarını insert eder, komutları ack'ler |
-| Agent → Collector | `GET /commands` | device key | Bekleyen `pause` / `resume` / `delete` komutlarını çeker |
-| Agent → Collector | `GET /verify` | device key | Kurulum sonrası bağlantı testi |
-| Dashboard → Collector | `POST /devices` | user JWT | Yeni cihaz oluşturur ve device key üretir (key bir kez gösterilir) |
-| Dashboard → Postgres | `SELECT` | user JWT | Collector'a hiç uğramaz; RLS korur |
+| Agent → Collector | `POST /inventory` | device key | Writes the machine's hardware profile over the `devices` row |
+| Agent → Collector | `POST /ingest` | device key | Inserts metric / log / crash records, acks commands |
+| Agent → Collector | `GET /commands` | device key | Pulls pending `pause` / `resume` / `delete` commands |
+| Agent → Collector | `GET /verify` | device key | Post-install connection test |
+| Dashboard → Collector | `POST /devices` | user JWT | Creates a host and generates a device key (shown once) |
+| Dashboard → Postgres | `SELECT` | user JWT | Never goes near the collector; RLS protects it |
 
 ---
 
-## Agent ne topluyor?
+## What does the agent collect?
 
-### Metrikler — varsayılan olarak 5 saniyede bir
+### Metrics — every 5 seconds by default
 
-| Alan | Ne ölçüyor |
+| Field | What it measures |
 |---|---|
-| `cpu_percent` | Önceki ölçümden bu yana CPU kullanım yüzdesi |
-| `ram_used_mb` | Kullanımdaki RAM — `total − available` (cache gibi geri alınabilir alanlar düşülmüş) |
-| `disk_percent` | Kök dizinin (`/`) doluluk oranı |
-| `net_sent_mb` / `net_recv_mb` | Ağ trafiği — toplam bayt değil, **MB/s cinsinden hız** |
+| `cpu_percent` | CPU usage since the previous sample |
+| `ram_used_mb` | RAM in use — `total − available` (reclaimable space such as cache excluded) |
+| `disk_percent` | How full the root directory (`/`) is |
+| `net_sent_mb` / `net_recv_mb` | Network traffic — not total bytes but a **rate in MB/s**, loopback excluded |
 
-Hesaplanamayan bir alan (ilk ölçüm, reboot sonrası sıfırlanan sayaç) `0` değil **`null`** yazılır: "ölçemedim" ile "sıfırdı" birbirine karıştırılmaz.
+A field that cannot be computed (the first sample, a counter reset after a reboot) is written as **`null`**, not `0`: "I could not measure it" is never confused with "it was zero".
 
-**Opsiyonel add-on'lar** — `config.toml`'dan tek tek açılır, kapalıyken `null` kalır:
+**Optional add-ons** — switched on one by one in `config.toml`, `null` while off:
 `temperature` · `swap` · `load_avg` · `gpu` · `external_ip` · `crash_processes`
 
-### Log'lar
+### Logs
 
-`journald`'dan okunur ve sabit bir şekle **normalize** edilir: `{ timestamp, level, message, source }`. Sadece 4 level var: `info` · `warning` · `error` · `critical`.
+Read from `journald` and **normalized** to a fixed shape: `{ timestamp, level, message, source }`. There are only 4 levels: `info` · `warning` · `error` · `critical`.
 
-Agent bir **cursor** tuttuğu için yeniden başlasa bile kaldığı yerden devam eder; log ne tekrarlanır ne atlanır. `journald`'a özgü kod tek bir dosyada izole edilmiştir (`logsources/`), böylece başka bir işletim sistemi desteği eklemek çekirdeği hiç değiştirmez.
+The agent keeps a **cursor**, so it picks up where it left off even after a restart; no log is repeated and none is skipped. The agent's own routine (`info`) lines are filtered out — a log shipper that ships its own chatter would spend most of its budget describing itself. Everything `journald`-specific is isolated in a single directory (`logsources/`), so adding support for another operating system does not touch the core.
 
-### Envanter (makinenin künyesi)
+### Inventory (the machine's profile)
 
-`cpu_model`, çekirdek sayıları, `arch`, `ram_total_mb`, `disk_total_mb`, `os_name` / `os_version`, `kernel_version`, `last_boot`, `agent_version`.
+`cpu_model`, core counts, `arch`, `ram_total_mb`, `disk_total_mb`, `os_name` / `os_version`, `kernel_version`, `last_boot`, `agent_version`.
 
-Bunlar nadiren değiştiği için zaman serisi olarak saklanmaz — açılışta okunur, bir öncekiyle karşılaştırılır ve **yalnızca değiştiyse** gönderilip `devices` satırının üzerine yazılır.
+These rarely change, so they are not stored as a time series — they are read at startup, compared against the previous reading, and sent (overwriting the `devices` row) **only if something changed**.
 
 ### Crash snapshot
 
-Bir threshold aşıldığı anda (emergency flush), `crash_processes` add-on'u açıksa en çok kaynak tüketen ilk 5 process kaydedilir. Böylece "makine neden boğuldu" sorusunun cevabı çöküşle birlikte kaybolmaz.
+The moment a threshold is crossed (emergency flush), if the `crash_processes` add-on is on, the 5 heaviest processes are recorded. That way the answer to "what choked the machine" does not disappear along with the machine.
 
-### Zamanlama — varsayılanlar
+### Timing — defaults
 
-| Ne | Ne sıklıkla |
+| What | How often |
 |---|---|
-| Ölçüm toplama | 5 sn |
-| Buluta gönderim | 30 sn (kod bunu en az 10 sn ile sınırlar) |
-| Komut yoklama (poll) | 10 sn |
-| Emergency flush | CPU %90 · RAM %90 · disk %95 aşılınca — 20 sn cooldown ile |
-| Verinin saklanma süresi | 10 gün, sonra `pg_cron` siler |
+| Sampling | 5 s |
+| Shipping to the cloud | 10 s (the code floors this at 10 s) |
+| Command poll | 10 s |
+| Emergency flush | Past 90% CPU · 90% RAM · 95% disk — with a 10 s cooldown |
+| Data retention | 10 days, then `pg_cron` deletes it |
 
-Bu değerlerin hepsi makinedeki `config.toml`'dan yönetilir ve agent dosyayı her tick'te yeniden okur — **değişiklik için servisi yeniden başlatmak gerekmez.**
-
----
-
-## Veri modeli
-
-```
-accounts                 (bir kullanıcı = bir account)
-   └── devices           (o account'a ait makineler + envanter + device key hash'i)
-         ├── metrics             ölçüm satırları
-         ├── logs                normalize edilmiş log satırları
-         ├── crash_snapshots     flush anındaki process listesi
-         └── commands            pause / resume / delete kuyruğu
-```
-
-Her satır hem `device_id` hem `account_id` taşır. `account_id`'nin tekrarlanması (denormalization) bilinçlidir: RLS kuralı ve retention job'ı hiçbir `JOIN` yapmadan çalışabilsin diye.
-
-Bütün tablolarda **Row-Level Security** açık ve kural her yerde aynı: `account_id = auth.uid()`. Yani bir kullanıcı, kendi hesabına ait olmayan tek bir satırı bile göremez — bu kısıt uygulama kodunda değil, **database'in içinde** zorunlu kılınmıştır.
+All of these are managed from `config.toml` on the machine, and the agent re-reads that file on every tick — **no service restart is needed for a change to take effect.**
 
 ---
 
-## Öne çıkan tasarım kararları
+## Data model
 
-**Cihazlar kendi kimliğini kendisi söylemez.**
-Payload'ların içinde `device_id` yoktur. Agent sadece bir key sunar; collector bunu hash'leyip `devices.key_hash` ile eşleştirir ve hem `device_id`'yi hem `account_id`'yi kendisi türetir. Ele geçirilmiş bir agent başka bir hesabın verisine yazamaz — çünkü elinde o hesabı adlandıracak bir yol yoktur.
+```
+accounts                 (one user = one account)
+   └── devices           (that account's machines + inventory + device key hash)
+         ├── metrics             sample rows
+         ├── logs                normalized log rows
+         ├── crash_snapshots     the process list at flush time
+         └── commands            the pause / resume / delete queue
+```
 
-**Service key collector'dan asla çıkmaz.**
-Supabase service key'i RLS'i bypass eder; onu izlenen her makineye dağıtmak, ele geçirilen tek bir makineyi bütün bir database breach'ine çevirirdi. Bunun yerine her cihaz kendine ait, tek tek iptal edilebilen bir key taşır.
+Every row carries both `device_id` and `account_id`. Repeating `account_id` (denormalization) is deliberate: it lets the RLS rule and the retention job work without a single `JOIN`.
+
+**Row-Level Security** is on for every table and the rule is the same everywhere: `account_id = auth.uid()`. A user cannot see a single row that does not belong to their account — and that constraint is enforced **inside the database**, not in application code.
+
+---
+
+## Notable design decisions
+
+**Hosts do not get to say who they are.**
+There is no `device_id` inside the payloads. The agent only presents a key; the collector hashes it, matches it against `devices.key_hash`, and derives both `device_id` and `account_id` itself. A compromised agent cannot write into another account's data — it has no way to name that account.
+
+**The service key never leaves the collector.**
+The Supabase service key bypasses RLS; distributing it to every monitored machine would turn a single compromised host into a full database breach. Instead each host carries its own key, revocable one at a time.
 
 **Single writer.**
-Her veri parçasının sahibi tam olarak tek bir bileşendir: `state.json`'ı yalnızca agent yazar; `last_seen`, `key_hash` ve komut durumunu yalnızca collector yazar. Bu kural teamül olarak bırakılmamış, column-level grant'lerle database seviyesinde zorunlu kılınmıştır.
+Every piece of data has exactly one owner: only the agent writes `state.json`; only the collector writes `last_seen`, `key_hash` and command status. This is not left to convention — it is enforced at the database level with column-level grants.
 
 **At-least-once delivery + idempotency.**
-Agent her kaydı önce disk'teki spool'a yazar ve ancak `200` cevabını aldıktan sonra siler. Bu yüzden retry beklenen bir durumdur — dolayısıyla her kayıt agent'ın ürettiği bir `UUID` taşır ve server `ON CONFLICT DO NOTHING` ile insert eder. Sonuç: aynı kayıt iki kez gönderilse bile duplicate oluşmaz, veri kaybı içinse disk'in kendisinin arızalanması gerekir.
+The agent writes every record to the on-disk spool first and only deletes it after a `200`. Retries are therefore expected — which is why every record carries a UUID generated by the agent and the server inserts with `ON CONFLICT DO NOTHING`. The result: sending the same record twice produces no duplicate, and losing data would take the disk itself failing.
 
-**Pause, kaydı durdurmaz.**
-Bir cihazı pause etmek *upload*'ı durdurur, *toplamayı* değil. Veri yerelde birikmeye devam eder ve resume'da sırayla akar. Pause sırasında komut yoklaması da devam eder — aksi hâlde `resume` komutu cihaza hiçbir zaman ulaşamazdı. Komut ack'i de aynı sebeple durmaz: o bir telemetri değil kontrol mesajıdır ve tek bir ölçüm satırı taşımaz. Durdurulsaydı server komutun uygulandığını hiç öğrenemez, aynı `pause`u sonsuza kadar yeniden gönderir ve dashboard cihazı hâlâ "çalışıyor" gösterirdi.
+**Pause does not stop recording.**
+Pausing a host stops the *upload*, not the *collection*. Data keeps piling up locally and flows out in order on resume. Command polling continues during a pause too — otherwise a `resume` command could never reach the host. Command acks do not stop either, for the same reason: an ack is a control message, not telemetry, and carries no sample rows. If it stopped, the server would never learn the command was applied, would resend the same `pause` forever, and the dashboard would still show the host as running.
 
-**Silme işleminin bir sırası vardır.**
-Bir cihazı kaldırmak satırı hemen silmez. Önce kuyruğa bir `delete` komutu girer; agent komutu poll'da alır, **önce** ack'ler ve `200` cevabını gördükten sonra yerelini temizler. Collector satırı ancak o ack ile düşürür. Sıra her iki yönde de kritiktir: satır erken silinseydi key anında geçersizleşir ve agent kendisini kaldırması gerektiğini hiç öğrenemezdi; yerel temizlik ack'ten önce yapılsaydı key ile birlikte ack'i gönderme imkânı da giderdi ve satır sunucuda ölümsüz kalırdı.
+**Deletion has an order.**
+Removing a host does not delete the row right away. First a `delete` command enters the queue; the agent picks it up on a poll, acks it **first**, and cleans up locally only after seeing the `200`. The collector drops the row on that ack. The order matters in both directions: had the row been deleted early, the key would be invalid instantly and the agent would never learn it should remove itself; had the local wipe run before the ack, the key would be gone along with any chance of sending that ack, and the row would live forever on the server.
 
-Temizliğin ikinci yarısı ise agent'ın yetkisi **dışındadır**: servis yetkisiz bir kullanıcıyla, `NoNewPrivileges=yes` ve `ProtectSystem=strict` altında çalışır — kendi kurulumunu kaldıramaz, systemd'ye dokunamaz. Bu yüzden agent yalnızca yazabildiği tek yere, kendi state dizinine bir işaret dosyası bırakır; root tarafında bekleyen bir systemd `path` unit'i onu görür ve `uninstall.sh`'i çalıştırır. Böylece delete uçtan uca tamamlanır ama agent'ın yetkisi bir gram artmaz.
+The second half of that cleanup is **outside** the agent's privileges: the service runs as an unprivileged user under `NoNewPrivileges=yes` and `ProtectSystem=strict` — it cannot remove its own installation and cannot touch systemd. So the agent drops a marker file in the only place it can write, its own state directory; a systemd `path` unit waiting on the root side sees it and runs `uninstall.sh`. Delete completes end to end without the agent gaining a gram of privilege.
 
-**Agent'ın sınırları vardır.**
-Disk'teki spool hem yaş (10 gün) hem boyut (200 MB) ile sınırlanmış bir ring buffer'dır; sınır aşılınca en eski kayıt düşer. İzlediği makinenin disk'ini dolduran bir monitoring aracı, açıklaması beklenen outage'a kendisi sebep olmuş olur.
+**The agent has limits.**
+The on-disk spool is a ring buffer bounded by both age (10 days) and size (200 MB); past either limit the oldest record is dropped. A monitoring tool that fills up the disk of the machine it watches has caused the very outage it was supposed to explain.
 
 ---
 
-## Repo yapısı
+## Repository layout
 
 ```
-agent/         Python agent — izlenen makinede çalışır
-  core/          platform-bağımsız: loop, config, state, metrics, spool, shipper
-  logsources/    OS'a özgü log okuyucular, ortak bir interface arkasında
-collector/     FastAPI service @ Fly.io — sistemin tek yazma kapısı
-dashboard/     Next.js okuma arayüzü
-db/            şema, trigger'lar, row-level security, retention
+agent/         Python agent — runs on the monitored machine
+  core/          platform-independent: loop, config, state, metrics, spool, shipper
+  logsources/    OS-specific log readers, behind a shared interface
+collector/     FastAPI service @ Fly.io — the system's only write gate
+dashboard/     Next.js read interface
+db/            schema, triggers, row-level security, retention
 ```
 
-## Collector'ı yerelde çalıştırma
+## Running the collector locally
 
 ```bash
 cd collector
@@ -194,21 +194,54 @@ uvicorn main:app --reload --port 8080
 curl localhost:8080/health
 ```
 
-## Database kurulumu
+## Running the dashboard locally
 
-Bir Supabase projesine karşı, şu sırayla çalıştır:
+```bash
+cd dashboard
+cp .env.example .env.local     # fill in the Supabase URL, anon key and collector URL
+npm install
+npm run dev                    # http://localhost:3000
+```
+
+## Deploying the dashboard
+
+The `NEXT_PUBLIC_*` values are **baked into the JavaScript at build time**, so they cannot be Fly
+secrets — a secret only exists at runtime, long after the bundle is printed. They have to reach the
+Docker build as `--build-arg`:
+
+```bash
+cd dashboard
+fly deploy \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_... \
+  --build-arg NEXT_PUBLIC_COLLECTOR_URL=https://<collector>.fly.dev
+```
+
+Or, to avoid retyping them, straight from the file the dev server already uses:
+
+```bash
+fly deploy $(grep -E '^NEXT_PUBLIC_' .env.local | sed 's/^/--build-arg /')
+```
+
+`fly.toml` leaves those three build args **empty on purpose**. An example value there would let a
+bare `fly deploy` succeed and ship an image that looks healthy but can never reach Supabase; empty
+values make the build stop instead.
+
+## Database setup
+
+Against a Supabase project, run these in order:
 
 ```
 db/schema.sql  →  db/triggers.sql  →  db/rls.sql
 ```
 
-Sıra önemli: trigger'lar `accounts` tablosuna referans verir, policy'ler de her tabloya.
+The order matters: the triggers reference the `accounts` table, and the policies reference every table.
 
 ---
 
-## Durum
+## Status
 
-Aktif geliştirme aşamasında. Proje **vertical slice**'lar hâlinde inşa ediliyor — her adım yatay bir katman değil, uçtan uca çalışan ince bir yol.
+Under active development. The project is built in **vertical slices** — each step is a thin path that works end to end, not a horizontal layer.
 
 ---
 
@@ -217,9 +250,3 @@ Aktif geliştirme aşamasında. Proje **vertical slice**'lar hâlinde inşa edil
 TraceBox is licensed under the TraceBox License v1.0.
 
 See [LICENSE](./LICENSE) for the complete license terms.
-
-## Lisans
-
-TraceBox, TraceBox License v1.0 ile lisanslanmıştır.
-
-Lisansın tam şartları için [LICENSE](./LICENSE) dosyasına bakınız.

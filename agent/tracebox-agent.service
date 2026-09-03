@@ -1,5 +1,5 @@
 [Unit]
-Description=TraceBox Agent — metrik ve log toplayıp collector'a gönderir
+Description=TraceBox Agent — collects metrics and logs and ships them to the collector
 Documentation=https://github.com/denisergocmen/tracebox
 # Ağ hazır olmadan başlamak anlamsız değil ama gereksiz: agent zaten
 # gönderemediği veriyi spool'da tutar. Yine de ilk gönderimin boşa gitmemesi
@@ -29,6 +29,12 @@ ExecStart=/opt/tracebox/venv/bin/python -m agent
 # Çıktı satır satır tamponlanmasın: agent'ın uyarıları journald'a anında
 # düşsün, `systemctl status` gecikmeli göstermesin.
 Environment=PYTHONUNBUFFERED=1
+
+# Sabit journald kimliği. Agent kendi rutin satırlarını okurken buna bakıyor
+# (logsources/linux_journald.py → _SELF_IDENTIFIER); ayarlanmasaydı kimlik
+# yorumlayıcının adından ("python") türer ve makinedeki her Python süreci
+# agent sanılırdı.
+SyslogIdentifier=tracebox-agent
 
 Restart=on-failure
 RestartSec=5

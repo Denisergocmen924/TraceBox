@@ -1,5 +1,5 @@
 [Unit]
-Description=TraceBox Agent'ı kaldırır (delete komutunun root tarafı)
+Description=Removes the TraceBox Agent (the root side of the delete command)
 Documentation=https://github.com/denisergocmen/tracebox
 
 # Kaldırma betiği yoksa çalışacak bir şey de yok; birim `failed` yerine sessizce

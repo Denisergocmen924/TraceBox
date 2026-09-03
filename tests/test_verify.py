@@ -142,7 +142,7 @@ def test_unexpected_body_does_not_fail_the_check(transport, response):
 
 def test_401_is_a_failure_about_the_key(transport):
     """Reddedilen anahtar, kullanıcıyı doğrudan device_key'e yönlendirmeli."""
-    transport(respond(401, json={"detail": "Geçersiz cihaz anahtarı."}))
+    transport(respond(401, json={"detail": "Invalid device key."}))
     result = verify(make_config())
     assert result.ok is False
     assert "device_key" in result.detail

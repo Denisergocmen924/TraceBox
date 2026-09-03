@@ -36,5 +36,5 @@ async def call_or_503(operation):
     except SupabaseError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Kayıt şu an yazılamıyor.",
+            detail="The record could not be written right now.",
         ) from error

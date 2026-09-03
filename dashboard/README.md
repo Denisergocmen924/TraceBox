@@ -1,29 +1,95 @@
-# Dashboard — M9'da gelecek
+# Dashboard — M9
 
-Next.js + Tailwind. Kullanıcının **okuma** penceresi.
+Next.js 16 (App Router) + Tailwind v4 + TypeScript. Kullanıcının **okuma** penceresi.
+Ayrıntılı spec: `CLAUDE.md` §9.
 
-Bu klasör M9'a kadar bilerek boş. Sebep: dikey dilim yaklaşımı. Önce veri
-gerçekten Supabase'e düşsün (M3), sonra onu gösteren arayüz yazılsın. Tersini
-yapmak, henüz var olmayan verinin sahte kopyasına karşı UI geliştirmek olurdu.
+## Mimari — tek cümle
 
-## Kurulacak mimari
+**Veriyi tarayıcı çeker.** Next.js SSR ile veri çekmez; sayfa yüklendikten sonra tarayıcı
+doğrudan Supabase'e bağlanır. Fly'ın işi yalnızca JS/HTML sunmak (§9.1). Bunun üç sonucu var:
 
-- **Okuma:** Supabase client ile **doğrudan** Postgres'ten. Collector'a hiçbir
-  okuma isteği gitmez — RLS (`account_id = auth.uid()`) zaten satır bazında
-  koruyor, araya bir API katmanı koymak fayda getirmeden gecikme eklerdi.
-- **Auth:** Supabase Auth (e-posta/şifre).
-- **Yazma:**
-  - "Cihaz Ekle" → collector `POST /devices` (user JWT) → anahtar **bir kez**
-    gösterilir. Bu tek yazma işlemi collector'dan geçer, çünkü anahtar üretimi
-    ve hash'leme tarayıcıda yapılamaz.
-  - pause / resume / delete → `commands` tablosuna doğrudan INSERT
-    (RLS `ins_commands` politikası cihaz sahipliğini de doğrular).
-- **Barındırma:** Vercel.
+- Fly instance'ı küçük ve sabit yükte kalır — kullanıcı sayısı arttıkça büyümesi gerekmez.
+- Realtime (§9.9) mümkün olur; sunucu çekseydi canlı akış zaten çalışmazdı.
+- **Hiçbir route sunucuda veri çekmez.** `/devices/[id]` derleme çıktısında `ƒ` görünür
+  (dinamik segment, build anında id'ler bilinmiyor) ama sunucunun ürettiği şey boş bir
+  kabuktur; içindeki her satır tarayıcıda, kullanıcının kendi JWT'siyle iner.
 
-## Gösterilecekler
+**Okuma:** Supabase client + user JWT; RLS (`account_id = auth.uid()`) satır bazında korur.
+**Collector'a hiçbir okuma isteği gitmez.**
 
-- Cihaz kartları (CPU / RAM / disk anlık durum)
-- 10 günlük zaman çizelgesi (metrik + log birlikte)
-- `last_seen` üzerinden offline rozeti
-- pause / resume / delete butonları
-- Log seviye filtresi (info / warning / error / critical)
+**Yazma:** yalnızca "Cihaz Ekle" collector'dan geçer (`POST /devices` — anahtar üretimi ve
+hash'leme tarayıcıda yapılamaz). pause/resume/delete `commands` tablosuna doğrudan INSERT,
+cihaz adı `devices` UPDATE, zorla kaldırma `devices` DELETE — hepsi RLS ve kolon grant'ları
+altında.
+
+## Bugünkü durum — iskelet
+
+| Yol | Durum |
+|---|---|
+| `/login` | **Geçici**, süssüz giriş formu. Kayıt ekranı YOK (§9.2) |
+| `/devices` | ✅ Cihaz kartları — künye, dört durum rozeti, üç ölçü çubuğu (§9.3) |
+| `/devices/[id]` | ✅ 70/30 yerleşim + künye paneli + log listesi (§9.4). Grafik ve aksiyonlar sonraki dilimlerde |
+| `/` | Ekran değil, yol ayrımı: oturum varsa `/devices`, yoksa `/login` |
+
+`/login` bilerek süssüzdür. §9.12'deki kara kutu animasyonlu vitrin **en son** yapılır;
+o zaman bu dosya baştan yazılır. Bugünkü işi, altındaki tesisatın (Supabase Auth → oturum →
+RLS'li okuma) gerçekten çalıştığını kanıtlamak.
+
+## Çalıştırma
+
+```bash
+cd dashboard
+npm install
+cp .env.example .env.local     # değerleri Supabase panelinden doldur
+npm run dev                    # http://localhost:3000
+```
+
+`.env.local` git'e girmez (`.env.*` engelli). İki değişken de `NEXT_PUBLIC_` öneklidir,
+yani derlemede JS'e gömülür ve herkes görür — **bu bir sır değildir**. anon key'in tek
+yetkisi "RLS'e tabi bir istemciyim" demektir. Sır olan `SUPABASE_SERVICE_KEY`'dir ve
+yalnızca collector'da durur.
+
+**İlk hesap Supabase panelinden elle açılır** (Authentication → Users → Add user).
+`accounts` satırı `db/triggers.sql`'deki `on_auth_user_created` trigger'ı ile otomatik oluşur.
+
+## Klasör düzeni
+
+```
+dashboard/
+├── app/
+│   ├── layout.tsx          # kök gövde + metadata
+│   ├── globals.css         # görsel dil tokenleri (§9.11) — renkler BURADA, bileşende değil
+│   ├── page.tsx            # yol ayrımı
+│   ├── login/page.tsx      # geçici giriş formu
+│   └── devices/
+│       ├── page.tsx        # ekran 2 — ızgara, 10 sn yenileme
+│       ├── DeviceCard.tsx  # kart: künye + rozet + üç çubuk
+│       └── [id]/
+│           ├── page.tsx       # ekran 3 — 70/30 yerleşim, ortak aralık state'i
+│           ├── Timeline.tsx   # aralık düğmeleri (grafik yer tutucu)
+│           ├── LogList.tsx    # blok blok artımlı log listesi
+│           └── DetailPanel.tsx # sağ panel: künye + (devre dışı) aksiyonlar
+├── lib/
+│   ├── supabase.ts         # tek istemci, tembel kurulum
+│   ├── useSession.ts       # loading / signedIn / signedOut — üçü AYRI hâl
+│   ├── devices.ts          # cihaz sorguları + dört durumun türetilmesi
+│   ├── logs.ts             # UTC gün blokları + seviye eşiği + sayfalama
+│   └── time.ts             # "12 saniye önce", log saati, MB→GB
+├── next.config.ts          # output: standalone (Fly Docker imajı için)
+└── postcss.config.mjs      # Tailwind v4 — tailwind.config.js YOK, tema CSS içinde
+```
+
+## Henüz yapılmayanlar
+
+- **Zaman çizelgesi (§9.6–§9.8)** — seyreltme fonksiyonu bir migration gerektiriyor (§9.7).
+  Grafik gelince zoom ve "seçim log listesini de daraltır" bağı da gelir.
+- **Aksiyonlar (§9.10)** — pause/resume/delete, yıkıcı işlem onay penceresiyle birlikte.
+- **Canlı log akışı (§9.9)** — son 24 saat görünümünde Realtime; saniyede bir güncelleme
+  tavanı ve ~500 satırlık liste sınırı zorunlu.
+- **Blok tahliyesi (§9.5)** — "ekrandan 4 blok uzaklaşan bloklar bellekten atılır" kuralı
+  henüz uygulanmadı; bugünkü sınır, sayfa sayfa (200 satır) çekmenin kendisi.
+- **Deploy:** collector'dan **ayrı** bir Fly app olacak (§9.1). Dockerfile + fly.toml
+  henüz yazılmadı.
+- **CORS:** collector'da CORS middleware yok — "Cihaz Ekle" tarayıcıdan bugün bloklanır
+  (§9.13). Dashboard'ın origin'i belli olunca eklenecek.
+- **Grafik seyreltmesi:** cihaz detayı için bir migration çıkacak (§9.7).

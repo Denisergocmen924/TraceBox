@@ -150,11 +150,11 @@ class SupabaseClient:
             # Yalnızca sütun ADLARI loglanır — değerler loglanmaz; reddedilen
             # alan `key_hash` gibi bir sır olabilir.
             logger.error(
-                "devices güncellemesi reddedildi — izinsiz sütun: %s",
+                "devices update rejected — column not allowed: %s",
                 ", ".join(forbidden),
             )
             raise ValueError(
-                f"devices tablosunda yazılamayacak sütun(lar): {', '.join(forbidden)}"
+                f"column(s) that may not be written on the devices table: {', '.join(forbidden)}"
             )
 
         await self._request(
@@ -186,7 +186,7 @@ class SupabaseClient:
         if not rows:
             # PostgREST temsil istendiğinde satırı döndürür; boş gövde
             # beklenmedik bir durumdur ve sessizce geçilmemelidir.
-            raise SupabaseError("POST /devices: oluşturulan satır okunamadı")
+            raise SupabaseError("POST /devices: could not read back the created row")
 
         return rows[0]
 
@@ -280,13 +280,13 @@ class SupabaseClient:
         try:
             response = await self._client.request(method, path, **kwargs)
         except httpx.HTTPError as error:
-            logger.error("Supabase %s %s ulaşılamadı: %r", method, path, error)
+            logger.error("Supabase %s %s unreachable: %r", method, path, error)
             raise SupabaseError(f"{method} {path}: {error}") from error
 
         if response.is_error:
             code = _error_code(response)
             logger.error(
-                "Supabase %s %s → %s (kod: %s)",
+                "Supabase %s %s → %s (code: %s)",
                 method,
                 path,
                 response.status_code,
@@ -355,7 +355,7 @@ def init_client() -> SupabaseClient:
         if not value
     ]
     if missing:
-        raise RuntimeError(f"Eksik ortam değişkeni: {', '.join(missing)}")
+        raise RuntimeError(f"Missing environment variable: {', '.join(missing)}")
 
     # Yalnızca adres ve anahtarın ön eki loglanır — anahtarın kendisi asla.
     logger.info("Supabase hedefi: %s (anahtar: %s…)", url, service_key[:11])
@@ -379,7 +379,7 @@ async def close_client() -> None:
 def get_client() -> SupabaseClient:
     """Kurulmuş istemciyi döndürür — endpoint'ler bunu kullanır."""
     if _client is None:
-        raise RuntimeError("Supabase istemcisi kurulmadı.")
+        raise RuntimeError("Supabase client was not initialised.")
 
     return _client
 
@@ -391,6 +391,6 @@ def get_project_url() -> str:
     token'daki `iss` alanının beklenen değerini hesaplamak.
     """
     if _project_url is None:
-        raise RuntimeError("Supabase istemcisi kurulmadı.")
+        raise RuntimeError("Supabase client was not initialised.")
 
     return _project_url

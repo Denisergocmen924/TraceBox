@@ -1,5 +1,5 @@
 [Unit]
-Description=TraceBox — silinen cihazda kaldırmayı tetikler
+Description=TraceBox — triggers removal on a deleted device
 Documentation=https://github.com/denisergocmen/tracebox
 
 [Path]

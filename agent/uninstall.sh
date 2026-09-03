@@ -33,32 +33,32 @@ fail() { printf '\n✗ %s\n' "$*" >&2; exit 1; }
 
 # --- Ön koşullar -----------------------------------------------------------
 
-[[ ${EUID} -eq 0 ]] || fail "Bu betik root yetkisi ister: sudo ./uninstall.sh"
+[[ ${EUID} -eq 0 ]] || fail "This script needs root: sudo ./uninstall.sh"
 
 # --yes verilmediyse onay iste. Silinen şeyler geri getirilemez (anahtar dahil).
 if [[ "${1:-}" != "--yes" ]]; then
-  printf 'TraceBox Agent kaldırılacak:\n'
-  printf '  - %s durdurulup devre dışı bırakılacak\n' "${SERVICE_NAME}"
-  printf '  - %s izleyicisi kaldırılacak\n' "${UNINSTALL_PATH_UNIT}"
-  printf '  - %s, %s, %s silinecek\n' "${INSTALL_DIR}" "${CONFIG_DIR}" "${STATE_DIR}"
-  printf '  - %s kullanıcısı silinecek\n' "${SERVICE_USER}"
-  printf '\nCihaz anahtarı da silinir; cihazı tekrar eklemek için yeni anahtar gerekir.\n'
-  read -r -p 'Devam edilsin mi? [e/H] ' answer
-  [[ "${answer}" == "e" || "${answer}" == "E" ]] || fail "İptal edildi."
+  printf 'TraceBox Agent will be removed:\n'
+  printf '  - %s will be stopped and disabled\n' "${SERVICE_NAME}"
+  printf '  - the %s watcher will be removed\n' "${UNINSTALL_PATH_UNIT}"
+  printf '  - %s, %s and %s will be deleted\n' "${INSTALL_DIR}" "${CONFIG_DIR}" "${STATE_DIR}"
+  printf '  - the %s user will be deleted\n' "${SERVICE_USER}"
+  printf '\nThe device key is deleted too; adding this host again needs a new key.\n'
+  read -r -p 'Continue? [y/N] ' answer
+  [[ "${answer}" == "y" || "${answer}" == "Y" ]] || fail "Cancelled."
 fi
 
 # --- 1) Servisi durdur -----------------------------------------------------
 # Dosyalardan ÖNCE durdurulur: yoksa systemd, kodu silinmiş bir servisi
 # Restart=on-failure ile yeniden başlatmayı dener.
 
-step "Servis durduruluyor"
+step "Stopping the service"
 if command -v systemctl >/dev/null 2>&1; then
   systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1 || true
-  say "durduruldu ve devre dışı bırakıldı"
+  say "stopped and disabled"
 
   # İzleyici de kapatılır; işaret dosyası birazdan silinecek dizinde duruyor.
   systemctl disable --now "${UNINSTALL_PATH_UNIT}" >/dev/null 2>&1 || true
-  say "izleyici kapatıldı: ${UNINSTALL_PATH_UNIT}"
+  say "watcher disabled: ${UNINSTALL_PATH_UNIT}"
 
   # DİKKAT: ${UNINSTALL_SERVICE} durdurulmaz. Bu betiği şu anda o birim
   # çalıştırıyor olabilir; `stop` demek kendi süreç ağacını öldürmek, yani
@@ -66,13 +66,13 @@ if command -v systemctl >/dev/null 2>&1; then
   # yok (yalnızca path unit tetikler), dolayısıyla disable edilecek bir bağ
   # zaten yok — unit dosyasını silmek yeterli.
 else
-  say "systemctl yok — atlandı"
+  say "no systemctl — skipped"
 fi
 
 for unit_file in "${UNIT_PATH}" "${UNINSTALL_PATH_UNIT_PATH}" "${UNINSTALL_SERVICE_PATH}"; do
   if [[ -f "${unit_file}" ]]; then
     rm -f "${unit_file}"
-    say "unit dosyası silindi: ${unit_file}"
+    say "unit file removed: ${unit_file}"
   fi
 done
 
@@ -86,13 +86,13 @@ fi
 
 # --- 2) Dosyaları sil ------------------------------------------------------
 
-step "Dosyalar siliniyor"
+step "Deleting files"
 for path in "${INSTALL_DIR}" "${CONFIG_DIR}" "${STATE_DIR}"; do
   if [[ -e "${path}" ]]; then
     rm -rf "${path}"
-    say "silindi: ${path}"
+    say "deleted: ${path}"
   else
-    say "zaten yok: ${path}"
+    say "already gone: ${path}"
   fi
 done
 
@@ -100,15 +100,15 @@ done
 # En sona bırakılır: kullanıcı hâlâ varken dosya sahipliği tutarlı kalır ve
 # servis durmadan userdel zaten başarısız olurdu.
 
-step "Kullanıcı siliniyor"
+step "Deleting the user"
 if id "${SERVICE_USER}" >/dev/null 2>&1; then
   if userdel "${SERVICE_USER}" 2>/dev/null; then
-    say "silindi: ${SERVICE_USER}"
+    say "deleted: ${SERVICE_USER}"
   else
-    say "UYARI: ${SERVICE_USER} silinemedi (kullanıcıya ait süreç kalmış olabilir)"
+    say "WARNING: could not delete ${SERVICE_USER} (a process of theirs may still be running)"
   fi
 else
-  say "zaten yok: ${SERVICE_USER}"
+  say "already gone: ${SERVICE_USER}"
 fi
 
-printf '\n✓ TraceBox Agent kaldırıldı.\n'
+printf '\n✓ TraceBox Agent removed.\n'

@@ -222,10 +222,18 @@ def test_thresholds_come_from_the_config_not_from_constants():
 
 # --- cooldown: sel koruması ------------------------------------------------
 
+# Testlerin kullandığı cooldown. `Config`in varsayılanından OKUNUYOR, elle
+# yazılmıyor: değer 2026-08-31'de 20'den 10'a indirildiğinde bu bloktaki dört
+# test sabit `20` taşıdığı için hiçbiri kırılmadı — yani üretimdeki değişikliği
+# haber veren bir şey yoktu. Sınırlar da artık damga değil FARK olarak yazılı
+# (COOLDOWN ± 1); önceki hâlde "25 saniye önce" 20'lik bir cooldown için gevşek
+# bir sınırdı ve varsayılan düştükçe daha da gevşiyordu.
+COOLDOWN = Config.flush_cooldown_seconds
+
 
 def test_first_flush_is_never_blocked():
     """Damga yoksa daha önce hiç flush edilmemiştir; cooldown kapalıdır."""
-    assert flush.cooldown_active(None, 20) is False
+    assert flush.cooldown_active(None, COOLDOWN) is False
 
 
 def test_unreadable_stamp_does_not_block_the_flush():
@@ -235,15 +243,15 @@ def test_unreadable_stamp_does_not_block_the_flush():
     aksi yönde yorumlanırsa tek bir bozuk satır acil gönderimi kalıcı olarak
     kapatırdı.
     """
-    assert flush.cooldown_active("dün", 20) is False
+    assert flush.cooldown_active("dün", COOLDOWN) is False
 
 
 def test_recent_flush_blocks_the_next_one():
-    assert flush.cooldown_active(iso_seconds_ago(5), 20) is True
+    assert flush.cooldown_active(iso_seconds_ago(COOLDOWN - 1), COOLDOWN) is True
 
 
 def test_cooldown_expires():
-    assert flush.cooldown_active(iso_seconds_ago(25), 20) is False
+    assert flush.cooldown_active(iso_seconds_ago(COOLDOWN + 1), COOLDOWN) is False
 
 
 def test_a_stamp_from_the_future_does_not_lock_the_flush_forever():
@@ -253,7 +261,7 @@ def test_a_stamp_from_the_future_does_not_lock_the_flush_forever():
     kadar — saatlerce, günlerce — açık kalır ve acil gönderim tamamen durur.
     O yüzden negatif fark, cooldown'ın kapalı olması demektir.
     """
-    assert flush.cooldown_active(iso_seconds_ago(-3600), 20) is False
+    assert flush.cooldown_active(iso_seconds_ago(-3600), COOLDOWN) is False
 
 
 # --- build_crash_snapshot: wire satırı -------------------------------------

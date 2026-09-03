@@ -140,14 +140,14 @@ class Shipper:
         try:
             response = self._client.post(url, json=payload, headers=headers)
         except httpx.HTTPError as error:
-            return self._failure(f"bağlanılamadı ({error.__class__.__name__})")
+            return self._failure(f"could not connect ({error.__class__.__name__})")
 
         if response.status_code == 200:
             self._success()
             return True, ""
 
         if response.status_code == 401:
-            return self._failure("cihaz anahtarı reddedildi (401)")
+            return self._failure("device key rejected (401)")
 
         return self._failure(f"HTTP {response.status_code}")
 

@@ -188,14 +188,32 @@ class MetricsCollector:
           * ilk ölçüm — karşılaştırılacak önceki sayaç yok,
           * sayacın geriye gitmesi — makine yeniden başlamış ve sayaç sıfırlanmış
             demektir; fark negatif çıkar ve anlamsızdır.
+
+        LOOPBACK HARİÇ (`lo`). psutil.net_io_counters() varsayılan olarak tüm
+        arayüzleri toplar ve loopback da bunlara dâhildir; oysa `lo` üzerindeki
+        trafik makinenin kendi içinde kalır, ağa hiç çıkmaz. Aynı bayt hem
+        gönderilen hem alınan olarak sayıldığı için ölçüm iki kez şişerdi:
+        yerel bir veritabanına konuşan bir uygulama, ağ kartı boşken bile
+        grafikte megabitler gösterirdi. Kullanıcının sorusu "bu makine ağı ne
+        kadar kullanıyor" — cevabın içine makinenin kendi kendine konuşması
+        girmemeli.
         """
-        counters = psutil.net_io_counters()
+        totals = self._external_bytes()
         now = time.monotonic()
         previous = self._previous_net
 
+        if totals is None:
+            # Arayüz listesi okunamadı. Sayaç DA sıfırlanır: eski tabanı
+            # saklasaydık, okuma geri geldiğinde arada geçen tüm süre tek bir
+            # örneğe sıkışır ve sahte bir sıçrama olarak çizilirdi.
+            self._previous_net = None
+            return None, None
+
+        sent, recv = totals
+
         # Sayaçlar her durumda güncellenir: hesap yapılamayan bir ölçüm bile
         # bir SONRAKİ ölçümün tabanı olur.
-        self._previous_net = (counters.bytes_sent, counters.bytes_recv, now)
+        self._previous_net = (sent, recv, now)
 
         if previous is None:
             return None, None
@@ -204,12 +222,40 @@ class MetricsCollector:
         elapsed = now - previous_time
         if elapsed <= 0:
             return None, None
-        if counters.bytes_sent < previous_sent or counters.bytes_recv < previous_recv:
+        if sent < previous_sent or recv < previous_recv:
             return None, None
 
-        sent_rate = (counters.bytes_sent - previous_sent) / BYTES_PER_MB / elapsed
-        recv_rate = (counters.bytes_recv - previous_recv) / BYTES_PER_MB / elapsed
+        sent_rate = (sent - previous_sent) / BYTES_PER_MB / elapsed
+        recv_rate = (recv - previous_recv) / BYTES_PER_MB / elapsed
         return round(sent_rate, 3), round(recv_rate, 3)
+
+    @staticmethod
+    def _external_bytes() -> tuple[int, int] | None:
+        """Loopback dışındaki arayüzlerin toplam gönderilen/alınan baytı.
+
+        Arayüz adı `lo` ile başlıyorsa atlanır: Linux'ta `lo`, ağ ad alanı
+        kullanan kurulumlarda `lo0`/`lo1` da görülebilir. Ad üzerinden eleme
+        kaba bir ölçüt ama psutil arayüzün türünü söylemiyor; alternatif,
+        her platform için ayrı bir sistem çağrısı yazmak olurdu.
+
+        Sayaç geri toplandığı için, ARAYÜZ SAYISI DEĞİŞİRSE (bir VPN kalkar,
+        bir kapsayıcı köprüsü inerse) toplam geriye gidebilir. Bu, çağıranın
+        zaten ele aldığı "sayaç geriye gitti" durumuna düşer: o örnek atlanır,
+        bir sonraki yeni tabandan hesaplanır.
+        """
+        try:
+            per_nic = psutil.net_io_counters(pernic=True)
+        except (OSError, RuntimeError):
+            return None
+
+        sent = 0
+        recv = 0
+        for name, counters in per_nic.items():
+            if name.lower().startswith("lo"):
+                continue
+            sent += counters.bytes_sent
+            recv += counters.bytes_recv
+        return sent, recv
 
 
 def _cpu_temperature() -> float | None:

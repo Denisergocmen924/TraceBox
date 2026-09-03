@@ -29,9 +29,9 @@ EXIT_VERIFY_FAILED = 3
 
 VERIFY_FLAG = "--verify"
 
-USAGE = """Kullanım:
-  python -m agent             agent servisini çalıştırır
-  python -m agent --verify    collector bağlantısını sınar, sonra çıkar
+USAGE = """Usage:
+  python -m agent             run the agent service
+  python -m agent --verify    test the collector connection, then exit
 """
 
 
@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         # agent hiç açılmasın, yanlış ayarla çalışmasın.
         config = loader.load()
     except ConfigError as exc:
-        print(f"config hatası: {exc}", file=sys.stderr, flush=True)
+        print(f"configuration error: {exc}", file=sys.stderr, flush=True)
         return EXIT_CONFIG_ERROR
 
     if args == [VERIFY_FLAG]:
@@ -63,8 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     # Restart=on-failure ile çalışıyor, yani yeniden başlatmaz.
     if store.is_deleted():
         print(
-            f"Bu cihaz silindi ({store.deleted_marker_path}); agent başlatılmadı.\n"
-            "Kurulumu tamamen kaldırmak için: sudo /opt/tracebox/uninstall.sh --yes",
+            f"This host was deleted ({store.deleted_marker_path}); the agent did not start.\n"
+            "To remove the installation completely: sudo /opt/tracebox/uninstall.sh --yes",
             flush=True,
         )
         return EXIT_OK
@@ -78,10 +78,10 @@ def main(argv: list[str] | None = None) -> int:
         with SingleWriterLock(store.directory):
             loop.run(loader, store, log_source)
     except RuntimeError as exc:
-        print(f"başlatılamadı: {exc}", file=sys.stderr, flush=True)
+        print(f"could not start: {exc}", file=sys.stderr, flush=True)
         return EXIT_ALREADY_RUNNING
     except OSError as exc:
-        print(f"dosya erişim hatası: {exc}", file=sys.stderr, flush=True)
+        print(f"file access error: {exc}", file=sys.stderr, flush=True)
         return EXIT_CONFIG_ERROR
 
     return EXIT_OK
@@ -96,10 +96,10 @@ def _run_verify(config) -> int:
     result = verify(config)
 
     if result.ok:
-        print(f"✓ Kuruldu ve bağlandı — {result.detail}", flush=True)
+        print(f"✓ Installed and connected — {result.detail}", flush=True)
         return EXIT_OK
 
-    print(f"✗ Bağlanamadı — {result.detail}", file=sys.stderr, flush=True)
+    print(f"✗ Could not connect — {result.detail}", file=sys.stderr, flush=True)
     return EXIT_VERIFY_FAILED
 
 

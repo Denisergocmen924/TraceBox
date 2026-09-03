@@ -1,68 +1,69 @@
 # =============================================================================
-# TraceBox Agent — örnek yapılandırma
+# TraceBox Agent — example configuration
 #
-# Gerçek dosya: /etc/tracebox/config.toml (sahip: tracebox, izin: 600).
-# Agent bu dosyayı yalnızca okur; yazdığı tek dosya state.json'dır.
-# Döngü her tick'te dosyayı yeniden okuduğu için değişiklikler servisi yeniden
-# başlatmadan geçerli olur.
+# The real file lives at /etc/tracebox/config.toml (owner: tracebox, mode 600).
+# The agent only reads this file; the only file it writes is state.json.
+# The loop re-reads the file on every tick, so changes take effect without
+# restarting the service.
 # =============================================================================
 
-# --- Bağlantı ----------------------------------------------------------------
-# Collector'ın adresi; agent tüm isteklerini bu adrese gönderir.
+# --- Connection --------------------------------------------------------------
+# Address of the collector; the agent sends every request there.
 collector_url = "https://tracebox-collector.fly.dev"
 
-# Cihaz anahtarı. Agent'ın kimliği yalnızca bu değerdir: device_id'yi sunucu
-# anahtardan çözer. Sunucuda düz hali değil SHA-256
-# özeti saklanır (devices.key_hash), bu yüzden kaybedilen anahtar geri alınamaz.
-device_key = "tbx_live_BURAYA_ANAHTARINI_YAZ"
+# Device key. It is the agent's only identity: the server resolves device_id
+# from the key. The server stores the SHA-256 digest, not the plain value
+# (devices.key_hash), so a lost key cannot be recovered.
+device_key = "tbx_live_PUT_YOUR_KEY_HERE"
 
-# --- Zamanlama ---------------------------------------------------------------
-# Ölçüm alma sıklığı. Küçültmek zaman çözünürlüğünü artırır; CPU kullanımı ve
-# saklanan satır sayısı bu değerle ters orantılı büyür.
+# --- Timing ------------------------------------------------------------------
+# How often a sample is taken. A smaller value raises the time resolution; CPU
+# usage and the number of stored rows grow inversely with it.
 collect_interval_seconds = 5
 
-# Spool'da birikenin gönderilme sıklığı; aradaki ölçümler tek HTTP isteğinde
-# birleştirilir. Kod bu değeri 10 saniyeyle floor'lar — daha küçük bir değer
-# yazılsa da 10 kullanılır. Eşik aşımındaki acil flush bu aralığı beklemez.
-send_interval_seconds = 30
+# How often whatever piled up in the spool is sent; the samples in between are
+# merged into a single HTTP request. The code floors this at 10 seconds — a
+# smaller value is accepted but 10 is used. An urgent flush past a threshold
+# does not wait for this interval.
+send_interval_seconds = 10
 
-# Komut kuyruğunun yoklanma sıklığı. pause/resume/delete komutlarının cihaza
-# ulaşma gecikmesi en fazla bu kadardır.
+# How often the command queue is polled. This is the longest a pause/resume/
+# delete command can take to reach the device.
 command_poll_seconds = 10
 
-# --- Acil gönderim (flush) eşikleri ------------------------------------------
-# Ölçüm bu yüzdeleri aştığında spool, sıradaki normal gönderim beklenmeden
-# hemen boşaltılır.
+# --- Urgent send (flush) thresholds ------------------------------------------
+# When a sample goes past these percentages the spool is emptied right away,
+# without waiting for the next regular send.
 flush_cpu_threshold = 90
 flush_ram_threshold = 90
 flush_disk_threshold = 95
 
-# Bir acil gönderimden sonra yenisi için beklenecek süre. Bu süre içinde eşik
-# tekrar aşılsa da flush yapılmaz; veri spool'da birikmeye devam eder ve
-# sıradaki gönderimde çıkar.
-flush_cooldown_seconds = 20
+# How long to wait after an urgent send before another one may happen. Crossing
+# a threshold again within that window does not flush; the data keeps piling up
+# in the spool and leaves with the next send.
+flush_cooldown_seconds = 10
 
-# --- Spool (yerel bekleme alanı) sınırları -----------------------------------
-# Spool bir ring buffer'dır: iki sınırdan biri aşıldığında en eski kayıt silinir,
-# en yeni veri korunur. Uzun bir ağ kesintisinde spool'un diski doldurmasını bu
-# iki sınır engeller.
+# --- Spool (local staging area) limits ---------------------------------------
+# The spool is a ring buffer: when either limit is crossed the oldest record is
+# dropped and the newest data is kept. These two limits are what stops the
+# spool from filling the disk during a long network outage.
 spool_max_age_days = 10
 spool_max_size_mb = 200
 
-# --- Eklentiler (add-on) -----------------------------------------------------
-# Liste boşken yalnızca çekirdek metrikler toplanır; buraya eklenen her değer
-# ilgili alanı doldurur, kapalı olanlar null kalır.
+# --- Add-ons -----------------------------------------------------------------
+# With an empty list only the core metrics are collected; every value added
+# here fills the matching field, and the ones left out stay null.
 #
-# Kullanılabilir değerler:
-#   "temperature"     CPU sıcaklığı           -> metrics.temperature_c
-#   "swap"            swap kullanımı          -> metrics.swap_used_mb
-#   "load_avg"        yük ortalaması (Linux)  -> metrics.load_avg_1/5/15
-#   "gpu"             GPU kullanımı + VRAM    -> metrics.gpu_usage_percent, gpu_vram_used_mb
-#   "external_ip"     dış IP (statik)         -> devices.external_ip
-#                     Değeri agent GÖNDERMEZ: isteği alan taraf (collector)
-#                     bağlantının kaynak IP'sinden yazar. Buradaki tercih
-#                     yalnızca "yazılsın mı" sorusunu cevaplar.
-#   "crash_processes" flush anında en çok kaynak yiyen 5 süreç -> crash_snapshots
+# Available values:
+#   "temperature"     CPU temperature         -> metrics.temperature_c
+#   "swap"            swap usage              -> metrics.swap_used_mb
+#   "load_avg"        load average (Linux)    -> metrics.load_avg_1/5/15
+#   "gpu"             GPU usage + VRAM        -> metrics.gpu_usage_percent, gpu_vram_used_mb
+#   "external_ip"     external IP (static)    -> devices.external_ip
+#                     The agent does NOT send the value: the receiving side
+#                     (the collector) writes it from the connection's source
+#                     IP. The choice here only answers "should it be written".
+#   "crash_processes" the 5 heaviest processes at flush time -> crash_snapshots
 #
-# Örnek: enabled_addons = ["swap", "load_avg"]
+# Example: enabled_addons = ["swap", "load_avg"]
 enabled_addons = []

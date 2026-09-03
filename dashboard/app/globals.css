@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/*
+ * İKİ TEMA — açık varsayılan (CLAUDE.md §9.11.2).
+ *
+ * Açık temanın HER DEĞERİ `dashboard/example/2` görselinden ölçüldü: görsel
+ * ham piksele çevrilip (ffmpeg → rgb24) yüzeylerin ortancası, metinlerin en
+ * koyu üçte birinin ortancası okundu. Tahmin edilen tek renk yok; yorumlanan
+ * tek şey, ölçülen değerin en yakın standart tona yuvarlanması.
+ *
+ * Nasıl çalışıyor: Tailwind v4'te tema değişkenleri sıradan CSS custom
+ * property. `@theme` bloğu onları `:root`a yazıyor ve `bg-panel`, `text-muted`
+ * gibi sınıflar `var(--color-panel)` üretiyor. Koyu tema bu yüzden ikinci bir
+ * sınıf kümesi DEĞİL — yalnızca aynı değişkenlerin `[data-theme="dark"]`
+ * altında yeniden tanımlanması. Bileşen dosyalarında tek bir `dark:` öneki
+ * yok; olsaydı her renk iki yerde yazılır ve biri sessizce geride kalırdı.
+ */
+@theme {
+  /* --- yüzeyler ---------------------------------------------------------
+   * Referansta sayfa, kenar çubuğu ve üst çubuk AYNI renk (#fcfcfe); ayrımı
+   * yapan tek şey 1 piksellik çizgi. Öne çıkan tek yüzey kart: saf beyaz.
+   * Önceki turda zemin belirgin biçimde daha koyuydu (#f5f6f9) — kartları
+   * ayırmak için gereğinden fazla kontrast, referansta yok.
+   */
+  --color-bg: #fcfcfe;
+  --color-bg-soft: #fcfcfe;
+  --color-panel: #ffffff;
+  --color-panel-2: #f4f5f8; /* panel İÇİ vurgusuz yüzey: input, çubuk yatağı */
+  --color-line: #eef0f5;
+
+  /* --- metin ------------------------------------------------------------- */
+  --color-fg: #101828;
+  --color-muted: #475467;
+  --color-faint: #98a2b3; /* eksen etiketi, log kaynağı — muted'in altı */
+
+  /* --- birincil aksiyon: mor --------------------------------------------- */
+  --color-accent: #6647ef; /* ölçüldü: seçili menü yazısı */
+  --color-accent-strong: #5636e0;
+  --color-accent-soft: #f1eefd; /* ölçüldü: seçili menü hapının zemini */
+
+  /* --- durum renkleri ----------------------------------------------------
+   * Her birinin bir de "soft" zemini var: referansın rozetleri (Healthy,
+   * ERROR, WARN, INFO, Critical, Warning) dolu renk değil, açık zemin üstünde
+   * doygun yazı. `bg-danger/10` ile taklit edilebilirdi ama alfa harmanı
+   * ölçülen zeminleri birebir vermiyor.
+   */
+  --color-ok: #17b26a;
+  --color-ok-soft: #e3f8ec;
+  --color-warn: #f79009;
+  --color-warn-soft: #fdead3;
+  --color-danger: #f04438;
+  --color-danger-soft: #fdeae9;
+  --color-info: #3b82f6;
+  --color-info-soft: #ebf2fe;
+
+  /*
+   * --- ölçü renkleri -----------------------------------------------------
+   * Referans 2'nin dört kimliği: CPU mor, bellek yeşil, disk TURUNCU, ağ mavi.
+   * Disk kehribardan (#f59e0b) turuncuya alındı — görselde ölçülen çizgi ve
+   * ikon kutusu turuncu.
+   *
+   * Turuncu disk ile kehribar uyarı hâlâ yakın akraba. Bu yüzden "eşiğe
+   * yaklaştı" sinyali YALNIZCA çubuk rengine bırakılmadı: sayı da kehribara
+   * döner ve yanında bir uyarı üçgeni belirir (DeviceCard). Renk körü bir
+   * kullanıcı için de, turuncu bir çubuğa bakan biri için de sinyal ayakta.
+   */
+  --color-cpu: #7c5cf6;
+  --color-cpu-soft: #efeafe;
+  --color-ram: #16b364;
+  --color-ram-soft: #e5f8ed;
+  --color-disk: #f97316;
+  --color-disk-soft: #fef1e5;
+  --color-net: #3b82f6;
+  --color-net-soft: #ecf2fe;
+  /*
+   * Ağ grafiğinde İKİ çizgi var (gelen / giden) ve giden trafik MAGENTA.
+   *
+   * Önce camgöbeği (#06b6d4) denendi: gerekçe "maviyle aynı soğuk aileden,
+   * ikisi birlikte ağ diye okunur ama tonu ayırt edilecek kadar uzak" idi.
+   * Gerçek grafikte tutmadı — mavi ile camgöbeği arasında yalnızca ~20°
+   * ton farkı var ve agent'ın trafiği testere dişi gibi dalgalandığı için
+   * çizgiler saniyede bir kesişiyor; kullanıcı hangisinin gelen hangisinin
+   * giden olduğunu ayırt edemedi.
+   *
+   * Magenta, paletin KULLANILMAYAN tek geniş ton bölgesi: CPU moru 250°,
+   * RAM yeşili 160°, disk turuncusu 25°, ağ mavisi 217°. 330° hiçbirine
+   * komşu değil ve maviden ~113° uzak — üst üste binen iki çizgi bile
+   * birbirinden ayrılıyor. "Ağ ailesi" fikri kaybedildi ama o fikir zaten
+   * bir grafiğin İÇİNDE değil, iki grafik YAN YANAYKEN işe yarıyordu;
+   * grafiğin başlığı ve efsanesi o işi zaten yapıyor.
+   */
+  --color-net-out: #d6248b;
+  --color-net-out-soft: #fdeaf4;
+
+  --radius-card: 0.75rem; /* tüm kartlarda AYNI yarıçap — referansta 12px */
+
+  /*
+   * Kart gölgesi çok hafif. Açık temada kartı zeminden ayıran şey neredeyse
+   * yalnızca çerçeve; gölge sadece kartonluğu alıyor. Koyu temada gölge
+   * görünmez (siyah üstüne siyah), aşağıda `none`.
+   */
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-pop: 0 10px 30px rgb(16 24 40 / 0.12);
+}
+
+/* --- koyu tema (referans 1) ------------------------------------------------
+ * Aynı değişkenler, farklı değerler. Ölçü renkleri de tazeleniyor: açık
+ * temanın yeşili koyu lacivert üstünde donuk kalıyor, parlatılmadan okunmuyor.
+ * "soft" zeminler burada açık değil KOYU — aynı rolü (rozet zemini) koyu
+ * temada oynayan şey, ana rengin çok düşük parlaklıkta hâli.
+ */
+[data-theme="dark"] {
+  --color-bg: #070b15;
+  --color-bg-soft: #0a101d;
+  --color-panel: #0e1424;
+  --color-panel-2: #161e33;
+  --color-line: #1f2942;
+
+  --color-fg: #e8edf7;
+  --color-muted: #8794ad;
+  --color-faint: #5a6580;
+
+  --color-accent: #7c6cff;
+  --color-accent-strong: #6b5aff;
+  --color-accent-soft: #1e2350;
+
+  --color-ok: #22c55e;
+  --color-ok-soft: #0c2c1e;
+  --color-warn: #f59e0b;
+  --color-warn-soft: #33230a;
+  --color-danger: #f05252;
+  --color-danger-soft: #351417;
+  --color-info: #60a5fa;
+  --color-info-soft: #10203c;
+
+  --color-cpu: #8b7cff;
+  --color-cpu-soft: #1f1d47;
+  --color-ram: #34d399;
+  --color-ram-soft: #0c2c22;
+  --color-disk: #fb923c;
+  --color-disk-soft: #33200e;
+  --color-net: #60a5fa;
+  --color-net-soft: #10203c;
+  --color-net-out: #f472b6;
+  --color-net-out-soft: #3a1024;
+
+  --shadow-card: none;
+  --shadow-pop: 0 10px 30px rgb(0 0 0 / 0.5);
+}
+
+/*
+ * color-scheme, tarayıcının KENDİ çizdiği parçaları haberdar ediyor: kaydırma
+ * çubuğu, form denetimleri, otomatik doldurma zemini. Yalnızca değişkenleri
+ * değiştirseydik açık temada koyu bir kaydırma çubuğu kalabilirdi.
+ */
+:root {
+  color-scheme: light;
+
+  /*
+   * Kenar çubuğunun genişliği — görselden ölçüldü (kenar çizgisi x=212).
+   * Hem çubuğun kendisi hem içerik alanının sol boşluğu bunu okuyor. İki
+   * yerde ayrı ayrı yazılsaydı biri değiştiğinde içerik ya çubuğun altına
+   * girer ya arada boşluk bırakırdı. @theme'de değil: bu bir renk ölçeği
+   * değil, tek bir ölçü — utility üretmesine gerek yok.
+   */
+  --sidebar-w: 212px;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/*
+ * Zemin DÜZ. Önceki turda sol üstten inen soluk bir mor hâle vardı;
+ * referansta yok — ölçülen her noktada zemin aynı #fcfcfe. Gradyan, birebir
+ * kopyada fark edilen ilk sapmalardan biriydi.
+ */
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Kaydırma çubuğu inceltiliyor. Varsayılan kalın çubuk, panel kenarında
+ * gereğinden fazla yer kaplıyor ve göz doğrudan oraya gidiyor.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+/*
+ * Klavye ile gezinen kullanıcı nerede olduğunu görmeli. :focus-visible
+ * kullanılıyor, :focus değil — fareyle tıklayana halka çıkmaz.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

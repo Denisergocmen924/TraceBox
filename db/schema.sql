@@ -1,6 +1,6 @@
 -- =============================================================================
 -- TraceBox — db/schema.sql
--- 6 tablo, indeksler ve foreign key'ler.
+-- 6 tablo, indeksler, foreign key'ler ve grafik seyreltme fonksiyonu.
 --
 -- Bu dosya SIFIRDAN kurulum içindir: tabloların ŞU ANKİ halini anlatır ve boş bir
 -- veritabanına çalıştırılır. Zaten kurulmuş bir veritabanını güncellemek için
@@ -272,3 +272,117 @@ create table commands (
 
 -- Agent'ın komut poll'unda attığı sorgunun şekli: bu cihazın bekleyen komutları.
 create index commands_device_status_idx on commands (device_id, status);
+
+
+-- =============================================================================
+-- 7) metrics_buckets — grafik için seyreltme (downsampling) fonksiyonu
+-- =============================================================================
+-- Tablo değil, OKUMA fonksiyonu. Verilen cihazın verilen zaman aralığını eşit
+-- genişlikte kovalara böler ve her kovadan min / max / ortalama döndürür.
+--
+-- Neden gerekli: agent 5 saniyede bir ölçüyor — günde 17.280, 10 günde ~173.000
+-- satır (tek cihaz). Grafik ~1200 piksel geniş; noktaların %99'u zaten
+-- çizilemez. Ham satırları tarayıcıya indirmek, çizilmeyecek veriyi ağdan
+-- geçirmek olurdu. Seyreltme burada, veritabanında yapılır: hangi aralığa
+-- bakılırsa bakılsın ekrana ~1000 nokta iner (CLAUDE.md §9.7).
+--
+-- Neden min/max da dönüyor: ortalama tek başına yalan söyler. 5 saniyelik bir
+-- CPU patlaması 15 dakikalık bir kovanın ortalamasında kaybolur — oysa o patlama
+-- ürünün varlık sebebi. Grafikte bant min-max, içinden geçen çizgi ortalamadır
+-- (§9.6 madde 6). Yalnızca max da bir tür yalandır: makineyi olduğundan yoğun
+-- gösterir.
+--
+-- SECURITY INVOKER (kritik): fonksiyon ÇAĞIRANIN yetkisiyle koşar, dolayısıyla
+-- metrics üzerindeki RLS politikası uygulanmaya devam eder — başkasının
+-- device_id değeri geçilirse sıfır satır döner. DEFINER olsaydı RLS atlanır ve
+-- device_id kullanıcıdan geldiği için doğrudan bir okuma kapısı açılırdı.
+-- (triggers.sql'deki handle_new_user bilerek DEFINER'dır; gerekçesi orada.)
+-- set search_path = '' aynı savunmanın ikinci katmanı: fonksiyon içindeki her ad
+-- tam nitelikli yazılır, çağıranın search_path'i hangi tablonun okunduğunu
+-- değiştiremez.
+--
+-- Boş kova dönmez: cihazın kapalı olduğu aralıkta o kovalar sonuç kümesinde hiç
+-- görünmez. Arayüz iki komşu kovanın zaman farkına bakıp boşluğu kendi çizer.
+--
+-- Yeni indeks gerekmez: sorgu yukarıdaki (device_id, measured_at) indeksi
+-- üzerinden yürür.
+--
+-- Ağ sütunlarının ortalaması anlamlıdır çünkü net_sent_mb / net_recv_mb agent
+-- tarafında ORAN olarak hesaplanır (§4.2) — saniyedeki MB, kümülatif sayaç
+-- değil. Kümülatif olsalardı bir kovanın ortalaması hiçbir şey ifade etmezdi.
+-- Mbit'e çevirme arayüzde yapılır (x8); veritabanı kolonun kendi birimini korur.
+create or replace function public.metrics_buckets(
+  p_device_id uuid,
+  p_from      timestamptz,
+  p_to        timestamptz,
+  p_buckets   int default 1000
+)
+returns table (
+  bucket_start timestamptz,
+  samples      int,
+  cpu_min      real,
+  cpu_max      real,
+  cpu_avg      real,
+  ram_min      int,
+  ram_max      int,
+  ram_avg      real,
+  disk_min     real,
+  disk_max     real,
+  disk_avg     real,
+  net_sent_min real,
+  net_sent_max real,
+  net_sent_avg real,
+  net_recv_min real,
+  net_recv_max real,
+  net_recv_avg real
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with cfg as (
+    select
+      p_from as t0,
+      -- Kova sayısı sınırlanır. 1000 ekranın çözünürlüğüne oranlı sayıdır ama
+      -- parametre dışarıdan geliyor; sınırsız bırakılsaydı tek bir istek
+      -- milyonlarca kova üretip veritabanını meşgul edebilirdi.
+      least(greatest(coalesce(p_buckets, 1000), 1), 5000)::int as n,
+      -- Aralık en az 1 saniye sayılır: p_from = p_to gelirse kova genişliği
+      -- sıfır olur ve sorgu sıfıra bölme hatasıyla düşerdi.
+      greatest(extract(epoch from (p_to - p_from)), 1) as span_s
+  ),
+  w as (
+    select t0, n, span_s, span_s / n as width_s from cfg
+  )
+  select
+    -- Satırın kovası: aralığın başından bu yana geçen saniye kova genişliğine
+    -- bölünür, aşağı yuvarlanır, tekrar saniyeye çevrilip başlangıca eklenir.
+    -- Dönen değer kovanın BAŞLANGIÇ anıdır.
+    w.t0 + make_interval(
+      secs => (floor(extract(epoch from (m.measured_at - w.t0)) / w.width_s) * w.width_s)::double precision
+    )                             as bucket_start,
+    count(*)::int                 as samples,
+    min(m.cpu_percent)            as cpu_min,
+    max(m.cpu_percent)            as cpu_max,
+    avg(m.cpu_percent)::real      as cpu_avg,
+    min(m.ram_used_mb)            as ram_min,
+    max(m.ram_used_mb)            as ram_max,
+    avg(m.ram_used_mb)::real      as ram_avg,
+    min(m.disk_percent)           as disk_min,
+    max(m.disk_percent)           as disk_max,
+    avg(m.disk_percent)::real     as disk_avg,
+    min(m.net_sent_mb)            as net_sent_min,
+    max(m.net_sent_mb)            as net_sent_max,
+    avg(m.net_sent_mb)::real      as net_sent_avg,
+    min(m.net_recv_mb)            as net_recv_min,
+    max(m.net_recv_mb)            as net_recv_max,
+    avg(m.net_recv_mb)::real      as net_recv_avg
+  from public.metrics m
+  cross join w
+  where m.device_id   = p_device_id
+    and m.measured_at >= p_from
+    and m.measured_at <  p_to
+  group by 1
+  order by 1;
+$$;
