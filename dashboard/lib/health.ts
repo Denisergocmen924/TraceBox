@@ -51,6 +51,25 @@ export type IngestLag = {
    */
   lastReceivedAt: string | null;
   /**
+   * Örneklemin EN ESKİ varışı — yani pencerenin açıldığı an.
+   *
+   * Ekranda "500 satır" tek başına bir SAYI, çerçeve değil. 16 saatlik bir "en
+   * kötü", 42 dakikalık bir varış penceresinin içindeyse o satır tanımı gereği
+   * canlı yoldan değil birikmiş kuyruktan gelmiştir — ama bunu ancak pencerenin
+   * genişliği yazılıysa okunabilir. Ayrı sorgu değil: liste `received_at`
+   * azalan sıralı, son satır tanımı gereği en eskisi.
+   */
+  windowStartAt: string | null;
+  /**
+   * En yüksek gecikmeyi üreten satırın kendi iki damgası.
+   *
+   * `maxMs` tek başına bir SÜRE; kullanıcının eşleştirmesi gereken şey ise bir
+   * AN ("o gece makineyi askıya almıştım"). Süreyi ana çevirmek kullanıcının
+   * işi olmamalı. İkisi de zaten indirilmiş satırdan geliyor.
+   */
+  worstMeasuredAt: string | null;
+  worstReceivedAt: string | null;
+  /**
    * `received_at < measured_at` olan satır sayısı, yani NEGATİF gecikme.
    *
    * Fiziksel olarak imkânsız: veri varmadan ölçülemez. Görülüyorsa cihazın
@@ -99,9 +118,18 @@ export async function fetchIngestLag(params: {
   const deltas: number[] = [];
   let skewed = 0;
 
+  // En kötü satır DÖNGÜDE tutuluyor, sonradan `deltas`ten geri bulunarak değil:
+  // dizi yalnızca farkları taşıyor ve sıralandıktan sonra hangi satırdan
+  // geldikleri kayboluyor. Damgaları kaybetmemek için burada yakalanıyor.
+  let maxMs = 0;
+  let worstMeasuredAt: string | null = null;
+  let worstReceivedAt: string | null = null;
+
   for (const row of rows) {
-    const measured = Date.parse(row.measured_at as string);
-    const received = Date.parse(row.received_at as string);
+    const measuredAt = row.measured_at as string;
+    const receivedAt = row.received_at as string;
+    const measured = Date.parse(measuredAt);
+    const received = Date.parse(receivedAt);
     if (!Number.isFinite(measured) || !Number.isFinite(received)) continue;
 
     const delta = received - measured;
@@ -110,16 +138,25 @@ export async function fetchIngestLag(params: {
       continue; // saat kayması: dağılıma sokmak medyanı kirletirdi
     }
     deltas.push(delta);
+
+    if (delta >= maxMs) {
+      maxMs = delta;
+      worstMeasuredAt = measuredAt;
+      worstReceivedAt = receivedAt;
+    }
   }
 
   deltas.sort((a, b) => a - b);
 
   return {
     lastReceivedAt: (rows[0]?.received_at as string | undefined) ?? null,
+    windowStartAt: (rows[rows.length - 1]?.received_at as string | undefined) ?? null,
     samples: deltas.length,
     medianMs: percentile(deltas, 0.5),
     p95Ms: percentile(deltas, 0.95),
-    maxMs: deltas.length > 0 ? deltas[deltas.length - 1] : 0,
+    maxMs,
+    worstMeasuredAt,
+    worstReceivedAt,
     skewed,
   };
 }
@@ -485,10 +522,10 @@ export function formatLag(ms: number): string {
 /**
  * Sağlıklı sayılan gecikme tavanı.
  *
- * Bir batch spool'da en fazla `send_interval_seconds` bekler (§4.3, üst sınır
- * pratikte 30) ve yola çıktıktan sonra bir de ağ süresi eklenir. 60 saniye bu
- * ikisinin toplamına rahat bir pay bırakıyor: altındaysa hiçbir şey kuyrukta
- * BEKLEMİYOR demek.
+ * Bir batch spool'da en fazla `send_interval_seconds` bekler (§4.3: varsayılan
+ * 10, kodda taban da 10 — üst sınır yok, kullanıcı büyütebilir) ve yola
+ * çıktıktan sonra bir de ağ süresi eklenir. 60 saniye varsayılan aralığa rahat
+ * bir pay bırakıyor: altındaysa hiçbir şey kuyrukta BEKLEMİYOR demek.
  */
 export const LAG_OK_MS = 60_000;
 

@@ -39,6 +39,21 @@ function Figure({
   );
 }
 
+/**
+ * Damgayı UTC olarak yazar.
+ *
+ * Yerel saat DEĞİL, bilerek: bu satır kullanıcının kendi takvimindeki bir anı
+ * değil, `received_at`/`measured_at` çiftini anlatıyor ve veritabanındaki her
+ * şey UTC (§9.5). Buradaki tek amaç kullanıcının o anı bir kesintiyle
+ * eşleştirebilmesi; iki ayrı saat dilimi arasında zihinden çeviri yaptırmak
+ * tam da o eşleştirmeyi zorlaştırırdı.
+ */
+function formatUtc(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  return `${new Date(ms).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
 export function IngestLagPanel({
   lag,
   loading,
@@ -46,6 +61,12 @@ export function IngestLagPanel({
   lag: IngestLagData | null;
   loading: boolean;
 }) {
+  /* Örneklemin kapsadığı süre: en eski varış ile en yenisi arası. */
+  const windowMs =
+    lag?.windowStartAt && lag.lastReceivedAt
+      ? Math.max(0, Date.parse(lag.lastReceivedAt) - Date.parse(lag.windowStartAt))
+      : null;
+
   return (
     <Panel
       title="Ingest lag"
@@ -75,9 +96,45 @@ export function IngestLagPanel({
             <Figure label="Worst" value={formatLag(lag.maxMs)} />
           </div>
 
+          {/*
+            Sayıya ZAMAN çerçevesi ekleniyor. "500 satır" tek başına bir adet;
+            kullanıcının "16.2 saat" ile karşılaştıracağı şey ise bir SÜRE.
+            Çerçeve yazılmayınca en kötü değer okunamaz hâlde kalıyordu —
+            §9.6 madde 5'in grafiğe koyduğu "ne gösterdiğini söyle" kuralı.
+          */}
           <p className="mt-4 text-xs text-faint">
-            Over the last {lag.samples} metric rows.
+            Over the last {lag.samples} metric rows
+            {windowMs != null && <> — {formatLag(windowMs)} of arrivals</>}.
           </p>
+
+          {/*
+            En kötü örnek pencereden ESKİYSE bunu yazmak zorunlu: o satır
+            tanımı gereği canlı yoldan gelmedi, birikmiş kuyruktan geldi.
+            Yazılmasaydı kullanıcı yazma yolunun saatlerce yavaş olduğunu
+            sanırdı — oysa gördüğü şey spool'un işini yapması.
+
+            Yorum tek cümleyle sınırlı ve alternatifi de söylüyor: saati geri
+            kalmış bir cihaz veride BUNUNLA AYNI görünür, satırın kendi
+            damgaları ikisini ayırt edemez. Ayırt edemediğimiz şeyi teşhis
+            diye sunmak, panelin kendi dürüstlük kuralını çiğnemek olurdu.
+
+            Pencere LAG_OK_MS'ten darsa hiç yazılmıyor. Yeni kurulmuş bir
+            sistemde elde iki satır olabilir; o zaman pencere neredeyse sıfır
+            genişliğinde olur ve saniyelik NORMAL bir gecikme bile "pencereden
+            eski" sayılıp birikmiş kuyruk diye ilan edilirdi.
+          */}
+          {windowMs != null &&
+            windowMs >= LAG_OK_MS &&
+            lag.maxMs > windowMs &&
+            lag.worstMeasuredAt && (
+            <p className="mt-2 text-xs text-faint">
+              The worst sample was measured{" "}
+              <span className="text-muted">{formatUtc(lag.worstMeasuredAt)}</span>,
+              before this window opened — it reached the database from a spool
+              backlog, not from the live path. A host clock running behind would
+              look the same here.
+            </p>
+          )}
 
           {/*
             Saat kayması gizlenmiyor. `received_at < measured_at` fiziksel
