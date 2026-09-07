@@ -207,6 +207,8 @@ export function AddHostDialog({
             <label className="block">
               <span className="text-xs font-medium text-muted">Host name</span>
               <input
+                id="host-name"
+                name="host-name"
                 ref={nameRef}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -271,6 +273,8 @@ export function AddHostDialog({
 
             <label className="flex items-start gap-2.5 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm">
               <input
+                id="key-saved"
+                name="key-saved"
                 type="checkbox"
                 checked={acknowledged}
                 onChange={(event) => setAcknowledged(event.target.checked)}

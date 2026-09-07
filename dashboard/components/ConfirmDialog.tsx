@@ -19,7 +19,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { IconAlert } from "@/components/icons";
 
 /**
@@ -66,6 +66,10 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   const [typed, setTyped] = useState("");
+
+  /* Kimlik üretiliyor: bu diyalog genel amaçlı ve birkaç sayfadan çağrılıyor,
+     sabit bir id iki örnek aynı anda yaşadığında çakışırdı. */
+  const typedId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
@@ -138,6 +142,8 @@ export function ConfirmDialog({
               {requireHint ?? `Type "${requireText}" to confirm.`}
             </span>
             <input
+              id={typedId}
+              name="confirm-text"
               value={typed}
               onChange={(event) => setTyped(event.target.value)}
               autoComplete="off"

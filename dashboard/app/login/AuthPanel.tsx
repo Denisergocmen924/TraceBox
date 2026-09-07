@@ -157,6 +157,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         </label>
         <input
           id="new-password"
+          name="new-password"
           type="password"
           required
           minLength={MIN_PASSWORD}
@@ -216,6 +217,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         </label>
         <input
           id="email"
+          name="email"
           type="email"
           required
           autoComplete="email"
@@ -248,6 +250,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         </div>
         <input
           id="password"
+          name="password"
           type="password"
           required
           minLength={mode === "signup" ? MIN_PASSWORD : undefined}

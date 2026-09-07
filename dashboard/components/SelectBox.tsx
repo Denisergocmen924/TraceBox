@@ -14,6 +14,8 @@
  */
 "use client";
 
+import { useId } from "react";
+
 import { IconChevronDown } from "./icons";
 
 export function SelectBox({
@@ -31,6 +33,19 @@ export function SelectBox({
   ariaLabel?: string;
   children: React.ReactNode;
 }) {
+  /*
+   * Kimlik ÜRETİLİYOR, elle verilmiyor: bu kabuk birden çok kez basılıyor
+   * (üst çubukta host ve zaman seçicileri) ve sabit bir id ikisinde de aynı
+   * olurdu — geçersiz HTML, üstelik `document.getElementById` sessizce yanlış
+   * kutuyu döndürürdü. Sunucu ile istemcinin aynı değeri üretmesi gerektiği
+   * için `useId`, elle sayaç değil.
+   *
+   * `name` bilerek YOK: bu bir form alanı değil, bir arayüz denetimi. İsim
+   * vermek tarayıcının otomatik doldurmasına "burada kaydedilecek bir değer
+   * var" demek olurdu.
+   */
+  const id = useId();
+
   return (
     <div className="relative">
       <div className="pointer-events-none flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2 text-sm font-medium">
@@ -39,6 +54,7 @@ export function SelectBox({
         <IconChevronDown className="size-4 shrink-0 text-muted" />
       </div>
       <select
+        id={id}
         value={value}
         aria-label={ariaLabel}
         onChange={(e) => onChange(e.target.value)}
