@@ -127,9 +127,13 @@ type AppValue = {
   zoomBack: () => void;
   zoomReset: () => void;
   /**
-   * Metrik kanalı GERÇEKTEN kurulu mu (§9.6 madde 5). Grafikteki "Live"
-   * rozetini bu belirliyor: kanal koptuğunda rozeti yanık bırakmak,
-   * kullanıcıya makinenin veri üretmediğini söylemek olurdu.
+   * Metrik kanalı GERÇEKTEN kurulu mu (§9.6 madde 5). Rozetin İKİ koşulundan
+   * biri: kanal koptuğunda rozeti yanık bırakmak, kullanıcıya makinenin veri
+   * ürettiğini söylemek olurdu.
+   *
+   * Tek başına YETMİYOR — soket hiç eşleşmemiş bir makinede de kurulur.
+   * İkinci koşul (kaynak gerçekten gönderebiliyor mu) components/LiveLock.tsx
+   * içinde, `devices` + `now` üzerinden hesaplanıyor.
    */
   liveConnected: boolean;
   /**

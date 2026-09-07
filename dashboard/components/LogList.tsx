@@ -495,7 +495,7 @@ export function LogList({
         {/* Kilit + rozet; grafikteki ikilinin aynısı (components/LiveLock.tsx).
             Aynı bayrağı çeviriyorlar — Logs sayfasında grafik yok, kilit orada
             da bir yerde bulunmak zorunda. */}
-        <LiveLock connected={connected} />
+        <LiveLock connected={connected} deviceId={deviceId} />
 
         {/*
           Süzgeç TAM EŞLEŞME: her düğme yalnızca kendi seviyesini gösterir

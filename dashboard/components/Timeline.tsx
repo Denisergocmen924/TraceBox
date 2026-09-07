@@ -408,7 +408,7 @@ export function Timeline({
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
-          <LiveLock connected={liveConnected} />
+          <LiveLock connected={liveConnected} deviceId={deviceId} />
           {hovered && (
             <p className="text-right text-xs tabular-nums">
               <span className="text-fg">

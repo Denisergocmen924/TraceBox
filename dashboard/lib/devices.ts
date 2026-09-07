@@ -100,6 +100,27 @@ export function isSilent(device: Device, now: number): boolean {
   );
 }
 
+/**
+ * "Bu makineden ŞU AN veri gelebilir mi?" — canlı rozetinin (components/LiveLock.tsx)
+ * KAYNAK yarısı. `isSilent`in tersi değil, ondan bir adım dar.
+ *
+ * `deviceStatus(...) === "online"` DEĞİL, bilerek: durum etiketi tek bir sözcük
+ * üretmek için öncelik sırasına giriyor (yukarıdaki dörtlü), boru hattının açık
+ * olup olmadığını ise iki yerde yanlış söylerdi.
+ *
+ *  • paused — makine sessiz değil (agent komut poll'una DEVAM ediyor, §7,
+ *    last_seen tazeleniyor) ama buluta GÖNDERMİYOR. Etikete bakan bir rozet
+ *    hiç satır düşmeyen bir ekranın üstünde "Live" demeye devam ederdi.
+ *  • deleting — etiket her şeyin üstüne çıkıyor, oysa agent komutu uygulayana
+ *    kadar veri göndermeyi SÜRDÜRÜYOR. Etikete bakan rozet, hâlâ akan bir
+ *    grafiğin üstünde sönerdi.
+ *
+ * Yani sorulan şey "cihaz hangi etikette" değil, "hat açık mı".
+ */
+export function canStream(device: Device, now: number): boolean {
+  return !isSilent(device, now) && device.logging_enabled;
+}
+
 export const STATUS_LABEL: Record<DeviceStatus, string> = {
   online: "Online",
   offline: "Offline",

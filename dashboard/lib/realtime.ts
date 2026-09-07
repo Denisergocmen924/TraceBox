@@ -82,9 +82,9 @@ function subscribeInserts<T>(params: {
       )
       .subscribe((status) => {
         // "SUBSCRIBED" dışındaki her hâl (CHANNEL_ERROR, TIMED_OUT, CLOSED)
-        // canlı DEĞİL. Rozeti yalnızca gerçekten bağlıyken göstermek şart:
-        // "Live" yazıp satır akıtmamak, kullanıcıya hiç veri üretilmediğini
-        // söylemek olurdu.
+        // canlı DEĞİL. Ama bunun TERSİ de "canlı" demiyor: soket, hiç veri
+        // göndermemiş bir makinede de kurulur. Bu bayrak rozetin yalnızca
+        // taşıma yarısı; kaynak yarısını components/LiveLock.tsx ekliyor.
         onStatus?.(status === "SUBSCRIBED");
       });
   });
@@ -107,7 +107,7 @@ export function subscribeLogs(params: {
   /** `null` = hesabın tümü (Logs sayfası). Süzgeç düşer, RLS kalır. */
   deviceId: string | null;
   onInsert: (row: LogRow) => void;
-  /** Kanalın gerçekten kurulup kurulmadığı — ekranda "Live" rozetini bu belirler. */
+  /** Kanalın gerçekten kurulup kurulmadığı — "Live" rozetinin taşıma yarısı. */
   onStatus?: (live: boolean) => void;
 }): () => void {
   return subscribeInserts<LogRow>({ table: "logs", ...params });
