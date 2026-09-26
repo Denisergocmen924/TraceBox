@@ -24,7 +24,13 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { AuthPanel } from "./AuthPanel";
-import { FlightRecorderScene } from "./FlightRecorderScene";
+import {
+  FILM_BACKDROP,
+  FILM_FRAMING,
+  OPENING_SEEN_KEY,
+  OpeningSequence,
+  SCRIM,
+} from "./OpeningSequence";
 import { IconAlert, IconClock, IconKey } from "@/components/icons";
 
 /** Sol sütundaki üç madde. Üçü de ürünün gerçekten yaptığı şeyi anlatıyor. */
@@ -81,12 +87,124 @@ export default function LoginPage() {
     if (status === "signedIn" && !recovery) router.replace("/overview");
   }, [status, recovery, router]);
 
+  /*
+   * AÇILIŞ FİLMİ — iki ayrı soru, iki ayrı state.
+   *
+   * `opening`: film oynayacak mı? "unknown" hâli bilinçli — oturum durumu
+   * çözülmeden karar verilemez, çünkü oturumu olan kullanıcı bu sayfada
+   * kalmayacak ve filmin ilk karelerini bile görmemeli.
+   *
+   * `revealed`: giriş ekranı göründü mü? Filmden BAĞIMSIZ: film hiç oynamasa
+   * da, hata verse de, atlansa da bu bayrak açılır. Formun görünürlüğü hiçbir
+   * koşulda videoya bağlanmıyor.
+   */
+  const [opening, setOpening] = useState<"unknown" | "play" | "skip">(
+    "unknown",
+  );
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    if (opening !== "unknown") return; // karar bir kez verilir
+    if (status === "loading") return; // henüz bilmiyoruz
+    // Oturumu olan kullanıcı /overview'a gidiyor; ona hiçbir şey gösterilmez.
+    if (status === "signedIn" && !recovery) return;
+
+    // Hareket azaltma tercihi MUTLAK — erişilebilirlik sinematik deneyimin
+    // önünde gelir.
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    // Film bu sekmede oynadıysa bir daha oynamaz. Depo kapalıysa okuma
+    // patlar; o hâlde "izlenmedi" sayılır ve film oynar.
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem(OPENING_SEEN_KEY) === "1";
+    } catch {
+      /* yok sayılır */
+    }
+
+    /*
+     * Dar alan artık bir ELEME SEBEBİ DEĞİL. Telefon da aynı dosyayı aynı
+     * tam ekran akışla oynatır; kompozisyon `film-framing` ile korunur
+     * (globals.css). Dosya 1,15 MB — mobil bant genişliği için de kabul
+     * edilebilir bir yük.
+     */
+
+    // Şifre kurtarma bağlantısıyla gelen kullanıcı bir işi bitirmeye geldi,
+    // film izlemeye değil.
+    if (reduced || seen || recovery) {
+      setOpening("skip");
+      setRevealed(true);
+    } else {
+      setOpening("play");
+    }
+  }, [status, recovery, opening]);
+
+  /*
+   * SON EMNİYET — giriş ekranı hiçbir koşulda kilitli kalmaz.
+   *
+   * Yukarıdaki karar `status`a bağlı ve `status` çözülmeyebilir: Supabase
+   * adresi yanlışsa ya da ağ kopuksa `useSession` "loading" hâlinde asılı
+   * kalır. O hâlde `opening` "unknown", form da görünmez ve `inert` olurdu —
+   * kullanıcı siyah bir ekrana bakar, girişe hiç ulaşamazdı.
+   *
+   * Bu zamanlayıcı filmle ilgili DEĞİL: film bir kez başladıysa kendi bitişi
+   * (6,8 sn + karartma) bundan önce gelir ve `opening` çoktan "play" olmuştur.
+   */
+  useEffect(() => {
+    if (opening !== "unknown") return;
+
+    const timer = window.setTimeout(() => {
+      setOpening("skip");
+      setRevealed(true);
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
+  }, [opening]);
+
   return (
     <div
       data-theme="dark"
-      className="min-h-screen bg-bg text-fg selection:bg-accent/30"
+      className="relative min-h-screen bg-bg text-fg selection:bg-accent/30"
     >
-      <div className="mx-auto grid min-h-screen max-w-[1240px] items-center gap-12 px-6 py-12 lg:grid-cols-[1.15fr_minmax(360px,0.85fr)] lg:gap-16 lg:py-16">
+      {/*
+        ARKA PLAN — filmin SON KARESİ. Katman `fixed`: akışın dışında olduğu
+        için sayfa yerleşimini hiç etkilemiyor (kayma yok). Film oynarken
+        üstünü OpeningSequence kapatıyor; o katman silindiğinde altından çıkan
+        görüntü donan karenin aynısı oluyor — geçiş bu yüzden görünmez.
+      */}
+      <div
+        aria-hidden
+        className={`fixed inset-0 bg-cover bg-no-repeat transition-opacity duration-700 ${FILM_FRAMING} ${FILM_BACKDROP}`}
+        style={{
+          backgroundImage: "url(/poster-last.jpg)",
+          /*
+           * Oturum durumu çözülene kadar arka plan da yok. Karar "film
+           * oynasın" çıkacaksa kullanıcı önce SON kareyi görüp sonra filmin
+           * BAŞINA dönmüş olmamalı.
+           */
+          opacity: opening === "unknown" ? 0 : 1,
+        }}
+      />
+      {/* Karartma. OpeningSequence'teki karartmayla AYNI değer (SCRIM). */}
+      <div aria-hidden className="fixed inset-0" style={{ background: SCRIM }} />
+
+      <div
+        /*
+         * Form filmi BEKLEMİYOR: DOM'da, kurulu ve hazır; yalnızca görünmez
+         * ve `inert` ile dokunulmaz. `inert` olmasaydı sekme tuşu filmin
+         * arkasındaki alanlara düşerdi.
+         *
+         * `z-60` film katmanının (z-50) ÜSTÜNE alıyor: film bitişine yarım
+         * saniye kala form belirmeye başlıyor ve o sırada altta oynamaya
+         * devam ediyor. Görünmezken `inert` olduğu için isabet testi buraya
+         * takılmıyor — filmin "Skip" butonu tıklanabilir kalıyor.
+         */
+        inert={!revealed}
+        className="relative z-60 mx-auto grid min-h-screen max-w-[1240px] items-center gap-12 px-6 py-12 transition-opacity duration-700 lg:grid-cols-[1.15fr_minmax(360px,0.85fr)] lg:gap-16 lg:py-16"
+        style={{ opacity: revealed ? 1 : 0 }}
+      >
         {/* --- sol: anlatı + sahne ---------------------------------------- */}
         <section>
           <div className="flex items-center gap-2.5">
@@ -115,16 +233,7 @@ export default function LoginPage() {
             else.
           </p>
 
-          {/*
-            Sahne yalnızca geniş ekranda. Telefonda ilk ekranı bir animasyonla
-            doldurup formu katlamanın altına itmek, buraya giriş yapmak için
-            gelen kullanıcıyı cezalandırırdı.
-          */}
-          <div className="mt-10 hidden lg:block">
-            <FlightRecorderScene />
-          </div>
-
-          <ul className="mt-10 grid gap-6 sm:grid-cols-3">
+          <ul className="mt-12 grid gap-6 sm:grid-cols-3">
             {POINTS.map(({ icon: Icon, title, body }) => (
               <li key={title}>
                 <span className="flex size-9 items-center justify-center rounded-lg bg-accent-soft text-accent">
@@ -144,6 +253,15 @@ export default function LoginPage() {
           <AuthPanel recovery={recovery} />
         </section>
       </div>
+
+      {/*
+        Film. Yalnızca kararı verilmişse takılıyor ve işi bitince kendini
+        DOM'dan çıkarıyor. Tek çıktısı `onReveal` — "karartma oturdu, giriş
+        ekranı artık belirebilir".
+      */}
+      {opening === "play" && (
+        <OpeningSequence onReveal={() => setRevealed(true)} />
+      )}
     </div>
   );
 }

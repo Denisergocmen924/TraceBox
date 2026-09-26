@@ -202,3 +202,65 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/*
+ * AÇILIŞ FİLMİNİN KADRAJI — /login (app/login/OpeningSequence.tsx).
+ *
+ * Film 1920×1004, yani 1,91:1. Hikâye karenin sağ yarısında geçiyor: yanan
+ * enkaz, kara kutu, açılışı ve yeşil LED'in yolu (kaynağın yaklaşık %45–97'si).
+ *
+ * GENİŞ ALAN (oran ≥ 4/3): film alanı `cover` ile doldurur, kadraj ortalanır.
+ *
+ * DİKEY ALAN (oran ≤ 4/3): `cover` telefonda kaynağın yalnızca %24'ünü
+ * gösterirdi. Bunun yerine film alanın ortasında, tam genişlikte KARE bir
+ * pencere olarak durur (1004 px genişlik gösterir) ve pencere %94 konumuyla
+ * sağ yarıya hizalanır. Pencerenin üstü ve altı maske ile koyu zemine erir;
+ * ekran boş bir şerit gibi değil, tam ekran bir sahne gibi görünür.
+ *
+ * `film-framing` hem <video>'ya hem de son kareyi gösteren arka plan katmanına
+ * (`film-backdrop`) veriliyor. İkisi AYNI kuralı paylaşmak zorunda: farklı
+ * kadrajlarda olurlarsa film katmanı silindiği anda görüntü sıçrar.
+ * `object-position` div'de, `background-position` video'da yok sayılır.
+ *
+ * `film-stage` video katmanının kapsayıcısı: dikeyde pencereyi ortalar.
+ * `film-backdrop` fixed arka plan katmanı: dikeyde aynı yere yerleştirir.
+ */
+@media (max-aspect-ratio: 4 / 3) {
+  .film-framing {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-position: 94% center;
+    background-position: 94% center;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 18%,
+      #000 82%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 18%,
+      #000 82%,
+      transparent 100%
+    );
+  }
+  .film-stage {
+    display: grid;
+    place-items: center;
+  }
+  .film-backdrop {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+}
+
+@media (min-aspect-ratio: 4 / 3) {
+  .film-framing {
+    object-position: center;
+    background-position: center;
+  }
+}
