@@ -20,8 +20,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useApp } from "@/lib/appState";
-import { OFFLINE_AFTER_SECONDS, type Device } from "@/lib/devices";
 import {
   IconBell,
   IconChart,
@@ -32,9 +30,6 @@ import {
   IconServer,
   IconSettings,
 } from "./icons";
-
-/** Sol alt kutudaki sürüm. Agent'ın değil, DASHBOARD'ın sürümü. */
-const APP_VERSION = "v1.0.0";
 
 type NavItem = {
   label: string;
@@ -89,31 +84,6 @@ const NAV: NavItem[] = [
   },
 ];
 
-/**
- * Referans 2'nin sol alt köşesindeki "Collector · Healthy" rozeti.
- *
- * Uydurulmadı, GERÇEK veriden türüyor: cihazlardan biri son 60 saniye içinde
- * görüldüyse veri yolunun tamamı (agent → collector → Supabase → tarayıcı)
- * o an çalışıyor demektir. Ayrı bir sağlık isteği atmıyoruz; zaten elimizde
- * olan bilgiyi okuyor.
- *
- * Üçüncü hâl önemli: hiç cihaz yokken "Healthy" demek bir şey KANITLAMAZ,
- * çünkü test edilecek bir yol yok. O yüzden orada başka bir şey yazıyor.
- */
-function collectorState(devices: Device[] | null, now: number) {
-  if (!devices || devices.length === 0) {
-    return { label: "No hosts", tone: "bg-panel-2 text-faint", dot: "bg-faint" };
-  }
-  const fresh = devices.some(
-    (d) =>
-      d.last_seen != null &&
-      now - Date.parse(d.last_seen) <= OFFLINE_AFTER_SECONDS * 1000,
-  );
-  return fresh
-    ? { label: "Healthy", tone: "bg-ok-soft text-ok", dot: "bg-ok" }
-    : { label: "Silent", tone: "bg-warn-soft text-warn", dot: "bg-warn" };
-}
-
 /** Menü satırının ortak gövdesi. */
 function itemClass(active: boolean): string {
   return active
@@ -129,9 +99,7 @@ export function Sidebar({
   open: boolean;
   onClose: () => void;
 }) {
-  const { devices, now } = useApp();
   const pathname = usePathname();
-  const collector = collectorState(devices, now);
 
   return (
     <>
@@ -154,8 +122,10 @@ export function Sidebar({
       >
         {/* --- marka -------------------------------------------------------
             Yükseklik üst çubukla AYNI (80px): iki çizgi ekranın karşı
-            uçlarında buluşuyor ve kabuk tek parça görünüyor. Logo görselden
-            alınmadı — kullanıcının tek istisnası buydu. */}
+            uçlarında buluşuyor ve kabuk tek parça görünüyor. Logo artık
+            kullanıcının kendi hazırladığı asıl marka işareti
+            (`dashboard/example/Tracebox_logosu_kesin.png`) — gri zemin
+            şeffaflığa çevrilip kırpıldı (2026-09-29). */}
         <div className="flex h-20 shrink-0 items-center gap-2.5 px-5">
           <Image
             src="/tracebox-mark.png"
@@ -163,7 +133,7 @@ export function Sidebar({
             width={160}
             height={160}
             priority
-            className="size-8 shrink-0 rounded-lg"
+            className="size-8 shrink-0"
           />
           <span className="text-[17px] font-semibold tracking-tight">
             TraceBox
@@ -200,25 +170,6 @@ export function Sidebar({
             );
           })}
         </nav>
-
-        {/* --- toplayıcı rozeti (referans 2, sol alt) ----------------------
-            İki satır, aralarında çizgi: üstte durum, altta sürüm. */}
-        <div className="mt-auto shrink-0 p-4">
-          <div className="overflow-hidden rounded-lg border border-line">
-            <div className="flex items-center gap-2 px-3 py-2.5">
-              <span className={`size-2 shrink-0 rounded-full ${collector.dot}`} />
-              <span className="text-[13px] font-medium">Collector</span>
-              <span
-                className={`ml-auto rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${collector.tone}`}
-              >
-                {collector.label}
-              </span>
-            </div>
-            <p className="border-t border-line px-3 py-2 text-xs text-muted">
-              {APP_VERSION}
-            </p>
-          </div>
-        </div>
       </aside>
     </>
   );

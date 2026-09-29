@@ -6,9 +6,9 @@
  * zili KALDIRILDI — ikisi de referansta yok. Zilin içeriği kaybolmadı,
  * Overview'daki Alerts kartına taşındı; orada zaten daha görünür.
  *
- * Tema düğmesi duruyor. Referansta yok ama §9.11.2 iki temayı kilitledi ve
- * düğmesiz bir tema seçilemez. Yenile düğmesiyle aynı kutu biçiminde, yani
- * görsel dile yeni bir öğe sokmuyor — sadece aynı ailede bir kutu daha.
+ * Tema düğmesi burada YOK (2026-09-29 kaldırıldı) — Ayarlar sayfası zaten
+ * kendi tema seçicisini taşıyor (bkz. settings/page.tsx), üst çubukta aynı
+ * kontrolün ikinci bir kopyasına gerek yok.
  *
  * İki seçici de GERÇEK: host seçimi Overview'ın tamamını ve cihaz listesini
  * daraltıyor, zaman seçimi §9.8'in "zaman aralığı TEKTİR" kuralını taşıyor —
@@ -21,7 +21,6 @@ import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/appState";
 import { RANGES, type RangeKey } from "@/lib/logs";
 import { SelectBox } from "./SelectBox";
-import { ThemeToggle } from "./ThemeToggle";
 import {
   IconClock,
   IconLogout,
@@ -141,8 +140,6 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
             className={`size-[18px] ${refreshing ? "animate-spin" : ""}`}
           />
         </button>
-
-        <ThemeToggle />
 
         {/* --- hesap (referans: sağ üstte avatar) --------------------------
             Menü kapalıyken ekranda yalnızca daire var, yani duruş referansla

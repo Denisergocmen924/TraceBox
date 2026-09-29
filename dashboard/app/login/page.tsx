@@ -197,7 +197,7 @@ export default function LoginPage() {
       >
         {/* --- sol: anlatı + sahne ---------------------------------------- */}
         <section>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               aria-label="TraceBox"
@@ -205,7 +205,7 @@ export default function LoginPage() {
                 if (!logoShaking) setLogoShaking(true);
               }}
               onAnimationEnd={() => setLogoShaking(false)}
-              className={`size-9 shrink-0 rounded-lg ${logoShaking ? "logo-shake" : ""}`}
+              className={`size-12 shrink-0 ${logoShaking ? "logo-shake" : ""}`}
             >
               <Image
                 src="/tracebox-mark.png"
@@ -213,7 +213,7 @@ export default function LoginPage() {
                 width={160}
                 height={160}
                 priority
-                className="size-9 rounded-lg"
+                className="size-12"
               />
             </button>
             <span className="text-[19px] font-semibold tracking-tight">
