@@ -9,7 +9,7 @@
 
 # --- Connection --------------------------------------------------------------
 # Address of the collector; the agent sends every request there.
-collector_url = "https://tracebox-collector.fly.dev"
+collector_url = "https://collector.tracebox.observer"
 
 # Device key. It is the agent's only identity: the server resolves device_id
 # from the key. The server stores the SHA-256 digest, not the plain value

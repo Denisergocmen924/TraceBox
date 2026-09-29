@@ -20,7 +20,7 @@ REPO="${TRACEBOX_REPO:-Denisergocmen924/TraceBox}"
 REF="${TRACEBOX_REF:-master}"
 SOURCE_URL="https://github.com/${REPO}/archive/refs/heads/${REF}.tar.gz"
 
-DEFAULT_COLLECTOR_URL="https://tracebox-collector.fly.dev"
+DEFAULT_COLLECTOR_URL="https://collector.tracebox.observer"
 KEY_PREFIX="tbx_live_"
 
 INSTALL_DIR="/opt/tracebox"
