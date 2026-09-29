@@ -31,26 +31,6 @@ import {
   OpeningSequence,
   SCRIM,
 } from "./OpeningSequence";
-import { IconAlert, IconClock, IconKey } from "@/components/icons";
-
-/** Sol sütundaki üç madde. Üçü de ürünün gerçekten yaptığı şeyi anlatıyor. */
-const POINTS = [
-  {
-    icon: IconAlert,
-    title: "Ships before the crash",
-    body: "The agent flushes immediately when CPU, memory or disk crosses a threshold, and on every error log. Waiting until the machine is down is already too late.",
-  },
-  {
-    icon: IconClock,
-    title: "Ten days of timeline",
-    body: "A sample every five seconds, kept for ten days, drawn without hiding a single spike. Zoom in far enough and you are looking at the raw numbers the machine sent.",
-  },
-  {
-    icon: IconKey,
-    title: "Your rows, and nothing else",
-    body: "Every table is guarded by row-level security in Postgres. Your browser talks to the database with your own token; there is no shared read path.",
-  },
-];
 
 export default function LoginPage() {
   const { status } = useSession();
@@ -102,6 +82,16 @@ export default function LoginPage() {
     "unknown",
   );
   const [revealed, setRevealed] = useState(false);
+
+  /*
+   * Logo sallanması — saf bir tıklama şekeri. `logoShaking` true iken animasyon
+   * oynuyor; süresi dolunca `onAnimationEnd` kendisi false'a çeker, ayrı bir
+   * zamanlayıcıya gerek yok. Animasyon oynarken tıklama yok sayılıyor —
+   * state zaten true olduğu için ikinci bir tıklama sınıfı DEĞİŞTİRMEZ, yani
+   * CSS animasyonu yeniden başlamaz; en basit çözüm animasyon bitene kadar
+   * tıklamayı görmezden gelmek.
+   */
+  const [logoShaking, setLogoShaking] = useState(false);
 
   useEffect(() => {
     if (opening !== "unknown") return; // karar bir kez verilir
@@ -208,14 +198,24 @@ export default function LoginPage() {
         {/* --- sol: anlatı + sahne ---------------------------------------- */}
         <section>
           <div className="flex items-center gap-2.5">
-            <Image
-              src="/tracebox-mark.png"
-              alt=""
-              width={160}
-              height={160}
-              priority
-              className="size-9 rounded-lg"
-            />
+            <button
+              type="button"
+              aria-label="TraceBox"
+              onClick={() => {
+                if (!logoShaking) setLogoShaking(true);
+              }}
+              onAnimationEnd={() => setLogoShaking(false)}
+              className={`size-9 shrink-0 rounded-lg ${logoShaking ? "logo-shake" : ""}`}
+            >
+              <Image
+                src="/tracebox-mark.png"
+                alt=""
+                width={160}
+                height={160}
+                priority
+                className="size-9 rounded-lg"
+              />
+            </button>
             <span className="text-[19px] font-semibold tracking-tight">
               TraceBox
             </span>
@@ -227,25 +227,11 @@ export default function LoginPage() {
             kept where the crash can&apos;t reach.
           </h1>
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted">
-            TraceBox is a flight recorder for your servers. An agent on each
+            TraceBox is a flight recorder for your devices. An agent on each
             machine ships metrics and system logs out while it is still running
             — so when it goes silent, the minutes before are already somewhere
             else.
           </p>
-
-          <ul className="mt-12 grid gap-6 sm:grid-cols-3">
-            {POINTS.map(({ icon: Icon, title, body }) => (
-              <li key={title}>
-                <span className="flex size-9 items-center justify-center rounded-lg bg-accent-soft text-accent">
-                  <Icon className="size-[18px]" />
-                </span>
-                <h2 className="mt-3 text-sm font-semibold">{title}</h2>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-                  {body}
-                </p>
-              </li>
-            ))}
-          </ul>
         </section>
 
         {/* --- sağ: form --------------------------------------------------- */}

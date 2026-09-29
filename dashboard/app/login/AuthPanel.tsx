@@ -24,12 +24,9 @@
  *     tanınıyor. Kullanmadığımız veriyi toplamamak, gizlilik tarafında da
  *     doğru cevap.
  *
- *  4. ToS YOK, gizlilik NOTU var.
+ *  4. ToS YOK.
  *     Uydurma bir "Terms of Service" yazmak, olmayan bir tüzel kişiliğin
- *     sözünü vermek olurdu. Buna karşılık ürün gerçek makine telemetrisi
- *     topluyor; ne sakladığını ve ne kadar süreyle sakladığını söylemek
- *     zorunda. Formun altındaki tek cümle bunu yapıyor ve söylediği şey
- *     `accounts.retention_days` ile birebir aynı.
+ *     sözünü vermek olurdu.
  */
 "use client";
 
@@ -291,17 +288,6 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
               ? "Create account"
               : "Sign in"}
         </button>
-
-        {/*
-          Gizlilik notu — uydurma bir sözleşme değil, ne sakladığımızın tek
-          cümlelik doğrusu. On gün, `accounts.retention_days`ın varsayılanı;
-          silme işini pg_cron her gece kendisi yapıyor (db/retention.sql).
-        */}
-        <p className="mt-5 text-xs leading-relaxed text-faint">
-          TraceBox stores the metrics and logs shipped by the hosts you connect
-          for 10 days, then deletes them automatically. Nothing else about you
-          is collected.
-        </p>
       </form>
 
       {/*
