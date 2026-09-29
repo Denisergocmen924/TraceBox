@@ -214,7 +214,7 @@ cd dashboard
 fly deploy \
   --build-arg NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_... \
-  --build-arg NEXT_PUBLIC_COLLECTOR_URL=https://<collector>.fly.dev
+  --build-arg NEXT_PUBLIC_COLLECTOR_URL=https://collector.tracebox.observer
 ```
 
 Or, to avoid retyping them, straight from the file the dev server already uses:
