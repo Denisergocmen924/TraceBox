@@ -115,8 +115,8 @@ def test_kimlik_bilgisi_paylasimi_kapali(client):
     assert "access-control-allow-credentials" not in response.headers
 
 
-def test_yalnizca_post_acik(client):
-    """DELETE gibi bir yöntem preflight'tan onay ALMAMALI.
+def test_yalnizca_post_ve_delete_acik(client):
+    """PUT gibi bir yöntem preflight'tan onay ALMAMALI.
 
     Starlette bu durumda 400 dönüyor ve gerekçeyi gövdeye yazıyor. Origin
     başlığı yanıtta yine bulunuyor (origin'in kendisi izinli); reddi taşıyan
@@ -124,15 +124,25 @@ def test_yalnizca_post_acik(client):
     """
     response = client.options(
         "/devices",
-        headers={"Origin": ALLOWED, "Access-Control-Request-Method": "DELETE"},
+        headers={"Origin": ALLOWED, "Access-Control-Request-Method": "PUT"},
     )
 
     assert response.status_code == 400
     assert "method" in response.text
 
 
-def test_izinli_yontemler_yalnizca_post_ilan_eder(client):
-    """Preflight yanıtının ilan ettiği liste POST dışına taşmamalı."""
+def test_delete_preflight_onaylanir(client):
+    """`DELETE /account` tarayıcıdan çağrılıyor; preflight'ı geçmeli."""
+    response = client.options(
+        "/account",
+        headers={"Origin": ALLOWED, "Access-Control-Request-Method": "DELETE"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_izinli_yontemler_post_ve_delete_ilan_eder(client):
+    """Preflight yanıtının ilan ettiği liste POST ve DELETE dışına taşmamalı."""
     response = client.options(
         "/devices",
         headers={"Origin": ALLOWED, "Access-Control-Request-Method": "POST"},
@@ -142,7 +152,7 @@ def test_izinli_yontemler_yalnizca_post_ilan_eder(client):
         method.strip()
         for method in response.headers["access-control-allow-methods"].split(",")
     }
-    assert advertised == {"POST"}
+    assert advertised == {"POST", "DELETE"}
 
 
 # --- varsayılan liste ----------------------------------------------------

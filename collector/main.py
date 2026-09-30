@@ -7,6 +7,7 @@ Collector, cihazların buluta açılan tek yazma kapısıdır:
 
 Bağlı router'lar:
   endpoints_device.py    POST /devices                               (user JWT)
+  endpoints_account.py   DELETE /account                             (user JWT)
   endpoints_ingest.py    POST /inventory, POST /ingest, GET /verify  (device key)
   endpoints_commands.py  GET /commands                              (device key)
 """
@@ -20,6 +21,7 @@ from fastapi import FastAPI
 
 import supabase_client
 from cors import install_cors
+from endpoints_account import router as account_router
 from endpoints_commands import router as commands_router
 from endpoints_device import router as device_router
 from endpoints_ingest import router as ingest_router
@@ -63,6 +65,7 @@ app = FastAPI(
 install_cors(app)
 
 app.include_router(device_router)
+app.include_router(account_router)
 app.include_router(ingest_router)
 app.include_router(commands_router)
 

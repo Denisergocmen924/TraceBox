@@ -62,3 +62,31 @@ def test_mixed_update_is_rejected_as_a_whole(client):
                 {ALLOWED_COLUMN: "2026-08-22T00:00:00Z", FORBIDDEN_COLUMN: "sahte-ozet"},
             )
         )
+
+
+def test_delete_account_targets_the_auth_admin_path_not_rest(client):
+    """Hesap silme isteği `/auth/v1/admin/users/...` adresine gider, `/rest/v1/...` altına DEĞİL.
+
+    `httpx` baştaki `/`'lı bir yolu base_url'in sonuna ekler; base_url `/rest/v1`
+    ile bittiği için düzeltme olmadan istek `/rest/v1/auth/v1/admin/users/...`
+    olurdu — PostgREST'te böyle bir yol yok, 404 döner ve uç sessizce 503'e
+    çevrilirdi. Test gerçek adrese çıkmaz: istek sahte bir aktarıcıya düşer.
+    """
+    import httpx
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200)
+
+    client._client = httpx.AsyncClient(
+        base_url=str(client._client.base_url),
+        transport=httpx.MockTransport(handler),
+    )
+
+    asyncio.run(client.delete_account("hesap-1"))
+
+    assert len(seen) == 1
+    assert seen[0].method == "DELETE"
+    assert seen[0].url.path == "/auth/v1/admin/users/hesap-1"
