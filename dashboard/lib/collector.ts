@@ -89,3 +89,45 @@ export async function createDevice(deviceName: string): Promise<CreatedDevice> {
 
   return (await response.json()) as CreatedDevice;
 }
+
+/**
+ * Hesabı ve tüm verisini kalıcı olarak siler (§9.10 — iki aşamalı onaydan
+ * SONRA çağrılır; bu fonksiyon onay akışını tekrarlamaz).
+ *
+ * Kimlik yine kullanıcının kendi Supabase access token'ı — `createDevice`'la
+ * birebir aynı desen. Collector, token'ın `sub` alanından hangi hesabın
+ * silineceğini çıkarır; burada `account_id` gövdeye hiç YAZILMAZ.
+ */
+export async function deleteAccount(): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase().auth.getSession();
+
+  if (!session) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${collectorUrl()}/account`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the collector. Check your connection, or its CORS allowlist if this is a new deployment.",
+    );
+  }
+
+  if (!response.ok) {
+    let detail: string | null = null;
+    try {
+      detail = ((await response.json()) as { detail?: string }).detail ?? null;
+    } catch {
+      // Gövde JSON değilse (proxy hata sayfası, boş 502) sessizce geç.
+    }
+    throw new Error(detail ?? `The collector returned ${response.status}.`);
+  }
+}

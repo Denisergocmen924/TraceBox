@@ -1,11 +1,12 @@
 """
 CORS — tarayıcının collector'a doğrudan istek atabilmesi için.
 
-Neden gerekli: collector'ın uçlarından yalnızca **biri** tarayıcıdan çağrılıyor,
+Neden gerekli: collector'ın uçlarından yalnızca **ikisi** tarayıcıdan çağrılıyor,
 `POST /devices` (§9.1 — dashboard cihazı buradan açar, düz anahtar bir kez
-burada döner). Diğer üç uç agent'a ait; agent bir tarayıcı değil, CORS onu hiç
-ilgilendirmiyor. Bu ayar olmadan dashboard'un "Add Host" düğmesi tarayıcı
-tarafından, isteği sunucuya hiç göndermeden bloklanır (§9.13).
+burada döner) ve `DELETE /account` (2026-09-29 — §9.10'un iki aşamalı onayından
+sonra hesabı kalıntısız siler). Diğer uçlar agent'a ait; agent bir tarayıcı
+değil, CORS onu hiç ilgilendirmiyor. Bu ayar olmadan dashboard'un "Add Host"
+düğmesi tarayıcı tarafından, isteği sunucuya hiç göndermeden bloklanır (§9.13).
 
 **CORS bir güvenlik duvarı DEĞİLDİR** — burada yazan hiçbir şey `curl`'ü ya da
 başka bir sunucuyu durdurmaz. Ucu koruyan şey user JWT doğrulaması (`auth.py`).
@@ -41,9 +42,9 @@ ALLOWED_ORIGINS_ENV = "TRACEBOX_ALLOWED_ORIGINS"
 # adımlarından birini tamamen siliyor.
 DEFAULT_ORIGINS = ("http://localhost:3000",)
 
-# Yalnızca POST /devices tarayıcıdan çağrılıyor. GET/PUT/DELETE açmanın bir
+# POST /devices ve DELETE /account tarayıcıdan çağrılıyor. GET/PUT açmanın bir
 # karşılığı yok; liste ileride bir uç eklenirse büyür.
-ALLOWED_METHODS = ("POST",)
+ALLOWED_METHODS = ("POST", "DELETE")
 
 # Dashboard'un gönderdiği iki başlık: kimlik ve gövde tipi. Başka bir başlık
 # eklenmesi gerekmiyor — `*` yazmak, ileride eklenecek her başlığı görünmez

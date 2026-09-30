@@ -36,6 +36,13 @@ PREFER_IGNORE_DUPLICATES = "resolution=ignore-duplicates,return=minimal"
 # okumaya gerek yok.
 PREFER_MINIMAL = "return=minimal"
 
+# Supabase Auth'un yönetici (admin) yolu. `REST_PATH`'ten AYRI: PostgREST değil,
+# GoTrue karşılıyor. Aynı service key ikisinde de geçerli, o yüzden istemciyi
+# ikiye bölmeye gerek yok — yalnızca yol farklı. `httpx` baştaki `/`'lı bir yolu
+# base_url'in SONUNA ekler (`/rest/v1/auth/v1/...` olurdu), bu yüzden bu yol
+# `_root_url` ile birleştirilip tam adres olarak verilir; tam adres base_url'i yok sayar.
+AUTH_ADMIN_USERS_PATH = "/auth/v1/admin/users"
+
 # Eklenen satırın geri okunması gerektiğinde kullanılır. Cihaz kaydında `id`
 # sunucuda üretilir (`gen_random_uuid()`), yani çağıran onu ancak yanıttan
 # öğrenebilir.
@@ -110,6 +117,7 @@ class SupabaseClient:
     """PostgREST istemcisi. Uygulama ömrü boyunca tek örnek yaşar."""
 
     def __init__(self, url: str, service_key: str) -> None:
+        self._root_url = url
         self._client = httpx.AsyncClient(
             base_url=f"{url}{REST_PATH}",
             headers={
@@ -202,6 +210,22 @@ class SupabaseClient:
             "/devices",
             params={"id": f"eq.{device_id}"},
             headers={"Prefer": PREFER_MINIMAL},
+        )
+
+    async def delete_account(self, account_id: str) -> None:
+        """Kullanıcıyı Supabase Auth'tan tamamen siler.
+
+        `accounts.id references auth.users(id) on delete cascade` olduğu için
+        bu TEK çağrı yeterli: `auth.users` satırı gidince `accounts` gider,
+        onunla birlikte `devices` gider, onunla birlikte `metrics` / `logs` /
+        `crash_snapshots` / `commands` gider — hepsi aynı FK zincirinin parçası
+        (db/schema.sql). Bu yüzden burada ayrıca `DELETE FROM accounts …` ya da
+        `DELETE FROM devices …` çağrısı YOK; ikinci bir yol açmak, tek bir
+        zincirin iki farklı yerden kırılabileceği bir tutarsızlık riski katardı.
+        """
+        await self._request(
+            "DELETE",
+            f"{self._root_url}{AUTH_ADMIN_USERS_PATH}/{account_id}",
         )
 
     async def list_pending_commands(self, device_id: str) -> list[dict[str, Any]]:

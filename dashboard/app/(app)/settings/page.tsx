@@ -23,10 +23,12 @@ import { useApp } from "@/lib/appState";
 import { useTheme } from "@/lib/theme";
 import { fetchAccount, type Account } from "@/lib/account";
 import { supabase } from "@/lib/supabase";
+import { deleteAccount } from "@/lib/collector";
 import { localDateTime } from "@/lib/time";
 import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/components/PageHeader";
-import { IconLogout, IconMoon, IconSun } from "@/components/icons";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { IconLogout, IconMoon, IconSun, IconTrash } from "@/components/icons";
 
 /** Künye satırı: solda etiket + gerekçe, sağda değer. */
 function Row({
@@ -84,6 +86,30 @@ export default function SettingsPage() {
 
   const [account, setAccount] = useState<Account | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Hesap silme — sayfanın geri kalanından AYRI durum: dialog'un kendi
+  // busy/error'ı var, çünkü bu tek işlem başarısız olsa bile üstteki `error`
+  // (hesap satırı okunamadı) mesajıyla karışmamalı.
+  // İki aşamalı onay (§9.10): "type" → cümle yazdırılır, "final" → son "emin misin".
+  // null = pencere kapalı. Silme yalnızca "final" aşamasında tetiklenir.
+  const [deleteStep, setDeleteStep] = useState<"type" | "final" | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteAccount() {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      // Sunucudaki satır gitti; yerel oturumu da temizle. Yönlendirme burada
+      // EXPLICIT yapılmıyor — app/(app)/layout.tsx zaten `signedOut`
+      // durumunu dinleyip /login'e atıyor (bkz. lib/useSession.ts).
+      await supabase().auth.signOut();
+    } catch (e) {
+      setDeleteError(errorMessage(e));
+      setDeleteBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -269,8 +295,66 @@ export default function SettingsPage() {
             </button>
           </Row>
         </Card>
+
+        {/* --- yıkıcı işlem: hesap silme (§9.10) -------------------------- */}
+        <Card
+          title="Danger zone"
+          description="Deletes your account and everything under it — nothing kept."
+        >
+          <Row
+            label="Delete account"
+            hint={`Removes ${devices ? devices.length : "all"} host${devices?.length === 1 ? "" : "s"}, and every metric, log and crash snapshot they ever sent. There is no recovery — not from TraceBox, not from Supabase.`}
+          >
+            <button
+              onClick={() => {
+                setDeleteError(null);
+                setDeleteStep("type");
+              }}
+              className="flex items-center gap-2 rounded-lg border border-danger/40 px-3.5 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+            >
+              <IconTrash className="size-4" />
+              Delete account
+            </button>
+          </Row>
+        </Card>
       </div>
 
+      {deleteStep === "type" && (
+        <ConfirmDialog
+          title="Delete account"
+          confirmLabel="Continue"
+          requireText={email}
+          requireHint={`Type your account email (${email}) to confirm.`}
+          onConfirm={() => setDeleteStep("final")}
+          onCancel={() => setDeleteStep(null)}
+        >
+          <p>
+            Your account, every host you registered, and all of their
+            metrics, logs and crash snapshots will be deleted immediately.
+          </p>
+          <p>
+            Each host&rsquo;s agent keeps running and shipping — its key
+            simply stops matching anything, so it will get 401s. Run{" "}
+            <code className="rounded bg-panel-2 px-1 py-0.5 font-mono text-xs">
+              uninstall.sh
+            </code>{" "}
+            on machines you can still reach if you want them fully cleaned up.
+          </p>
+        </ConfirmDialog>
+      )}
+
+      {deleteStep === "final" && (
+        <ConfirmDialog
+          title="Are you absolutely sure?"
+          confirmLabel="Yes, delete my account"
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={handleDeleteAccount}
+          onCancel={() => setDeleteStep(null)}
+        >
+          <p>This is the last step. Once you confirm, the deletion starts right away.</p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
