@@ -12,11 +12,9 @@
  *     "Confirm email" AÇIK olmalı — kapalıyken bu ekran yine çalışır ama fren
  *     kalkmış olur.
  *
- *  2. GitHub / Google ile giriş YOK.
- *     Her sağlayıcı ortam başına bir OAuth uygulaması, bir yönlendirme adresi
- *     ve bir sır demek — üç deploy adımı karşılığında sıfır yeni yetenek.
- *     Sonradan eklenmesi tek bir `signInWithOAuth` çağrısı; bugün eklemek,
- *     kurulumu bağlamak.
+ *  2. GitHub / Google ile giriş VAR (eski "OAuth yok" kararı tersine çevrildi).
+ *     Ayrıntı ve gerekçe: md/memory/decisions.md. Sağlayıcı listesi tek yerde:
+ *     lib/oauthProviders.tsx.
  *
  *  3. Ad / soyad SORULMUYOR.
  *     `accounts` tablosunda böyle bir sütun yok; sormak bir migration ve onu
@@ -34,7 +32,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
-import { IconGitHub } from "@/components/icons";
+import { OAUTH_PROVIDERS, providerLabel, type OAuthProviderId } from "@/lib/oauthProviders";
 import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 
 type Mode = "signin" | "signup";
@@ -70,15 +68,15 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
-  async function signInWithGitHub() {
+  async function signInWithProvider(provider: OAuthProviderId) {
     setBusy(true);
     setError(null);
     setNotice(null);
-    // Başarılıysa tarayıcı GitHub'a gider ve sayfa terk edilir; busy'yi geri
+    // Başarılıysa tarayıcı sağlayıcıya gider ve sayfa terk edilir; busy'yi geri
     // açmaya gerek yok. Dönüşte /login'e inilir, oturum varsa sayfa kullanıcıyı
     // içeri alır (app/login/page.tsx).
     const { error } = await supabase().auth.signInWithOAuth({
-      provider: "github",
+      provider,
       options: { redirectTo: `${window.location.origin}/login` },
     });
     if (error) {
@@ -255,18 +253,23 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         </div>
 
         {/* --- sağlayıcı ile giriş ------------------------------------------
-            Kayıt ve giriş için AYNI düğme: GitHub hesabı yoksa Supabase onu
+            Kayıt ve giriş için AYNI düğme: sağlayıcı hesabıyla ilk girişte Supabase hesabı
             oluşturur. İki kipte ayrı düğme olması kullanıcıya olmayan bir
             fark anlatırdı. */}
-        <button
-          type="button"
-          onClick={signInWithGitHub}
-          disabled={busy}
-          className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm font-medium transition hover:border-accent disabled:opacity-50"
-        >
-          <IconGitHub className="size-[18px]" />
-          Continue with GitHub
-        </button>
+        <div className="mt-6 space-y-2.5">
+          {OAUTH_PROVIDERS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => signInWithProvider(id)}
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm font-medium transition hover:border-accent disabled:opacity-50"
+            >
+              <Icon className="size-[18px]" />
+              Continue with {label}
+            </button>
+          ))}
+        </div>
 
         <div className="mt-5 flex items-center gap-3 text-xs text-faint">
           <span className="h-px flex-1 bg-line" />
