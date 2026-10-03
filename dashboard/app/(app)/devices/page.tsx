@@ -21,6 +21,7 @@ import { AddHostDialog } from "./AddHostDialog";
 import { DeviceCard } from "./DeviceCard";
 import { SummaryCards } from "./SummaryCards";
 import { IconPlus } from "@/components/icons";
+import { EmptyState } from "@/components/EmptyState";
 
 /** Başlığın sağındaki üçlü sayaç (referans 2: Hosts / Online / Offline). */
 function Tally({
@@ -122,13 +123,10 @@ export default function DevicesPage() {
       )}
 
       {devices?.length === 0 && (
-        <div className="rounded-card border border-dashed border-line bg-panel/60 p-12 text-center">
-          <p className="font-medium">No hosts yet.</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-            Add a host, install the agent on that machine, and it will show up
-            here.
-          </p>
-        </div>
+        <EmptyState mascot="hosts" title="No hosts yet." dashed>
+          Add a host, install the agent on that machine, and it will show up
+          here.
+        </EmptyState>
       )}
 
       {shown && shown.length > 0 && (

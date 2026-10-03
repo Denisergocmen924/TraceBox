@@ -24,6 +24,7 @@ import Link from "next/link";
 import { useApp } from "@/lib/appState";
 import { PageHeader } from "@/components/PageHeader";
 import { LogList } from "@/components/LogList";
+import { EmptyState } from "@/components/EmptyState";
 
 export default function LogsPage() {
   const { devices, error, hostFilter } = useApp();
@@ -52,13 +53,13 @@ export default function LogsPage() {
       )}
 
       {devices && devices.length === 0 ? (
-        <p className="rounded-card border border-line bg-panel p-12 text-center text-sm text-muted shadow-card">
-          No hosts yet. Add one from{" "}
+        <EmptyState mascot="logs" title="No hosts yet.">
+          Add one from{" "}
           <Link href="/devices" className="font-medium text-accent">
             Hosts
           </Link>{" "}
           to start collecting logs.
-        </p>
+        </EmptyState>
       ) : (
         <LogList
           deviceId={hostFilter}

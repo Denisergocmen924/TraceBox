@@ -35,6 +35,7 @@ import { OFFLINE_AFTER_SECONDS } from "@/lib/devices";
 import { clockTime, relativeTime } from "@/lib/time";
 import { PageHeader, Tally } from "@/components/PageHeader";
 import { IconAlert, IconChevron } from "@/components/icons";
+import { EmptyState } from "@/components/EmptyState";
 
 const TONE: Record<
   AlertSeverity,
@@ -145,21 +146,20 @@ export default function AlertsPage() {
         </p>
       )}
 
-      {devices && alerts.length === 0 && (
-        <p className="rounded-card border border-line bg-panel p-12 text-center text-sm text-muted shadow-card">
-          {devices.length === 0 ? (
-            <>
-              No hosts yet. Add one from{" "}
-              <Link href="/devices" className="font-medium text-accent">
-                Hosts
-              </Link>
-              .
-            </>
-          ) : (
-            "Nothing to report — every host is reachable and under its thresholds."
-          )}
-        </p>
-      )}
+      {devices && alerts.length === 0 &&
+        (devices.length === 0 ? (
+          <EmptyState mascot="alert" title="No hosts yet.">
+            Add one from{" "}
+            <Link href="/devices" className="font-medium text-accent">
+              Hosts
+            </Link>
+            .
+          </EmptyState>
+        ) : (
+          <EmptyState mascot="ok" title="All clear.">
+            Nothing to report — every host is reachable and under its thresholds.
+          </EmptyState>
+        ))}
 
       <div className="space-y-6">
         {ORDER.filter((severity) => count(severity) > 0).map((severity) => (
