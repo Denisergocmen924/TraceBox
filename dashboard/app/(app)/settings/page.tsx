@@ -421,6 +421,14 @@ export default function SettingsPage() {
           title="Connected accounts"
           description="Sign-in methods linked to this TraceBox account. Any linked method opens the same account and the same hosts."
         >
+          {/* Unlink yalnızca TraceBox'taki bağlantıyı siler; sağlayıcıdaki izin
+              (grant) onda kalır. Bu HER OAuth sağlayıcısı için geçerli, o yüzden
+              not satır başına değil kartın başında. */}
+          <p className="border-b border-line px-5 py-3 text-xs text-muted">
+            Unlinking only removes the connection on TraceBox. To fully revoke access, also
+            remove TraceBox from the provider&apos;s own settings. Signing in again with the
+            same verified email links it back automatically.
+          </p>
           {OAUTH_PROVIDERS.map(({ id, label, Icon }) => {
             const identity = identities?.find((i) => i.provider === id);
             // Son kimlik çözülemez: hesaba girişin tek yolu kalmaz. Supabase de
