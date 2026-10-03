@@ -18,9 +18,10 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/lib/appState";
 import { useTheme } from "@/lib/theme";
+import { useSession } from "@/lib/useSession";
 import { fetchAccount, type Account } from "@/lib/account";
 import { supabase } from "@/lib/supabase";
 import { deleteAccount } from "@/lib/collector";
@@ -30,7 +31,8 @@ import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
-import { IconLogout, IconMoon, IconSun, IconTrash } from "@/components/icons";
+import type { UserIdentity } from "@supabase/supabase-js";
+import { IconGitHub, IconLogout, IconMoon, IconSun, IconTrash } from "@/components/icons";
 
 /** Künye satırı: solda etiket + gerekçe, sağda değer. */
 function Row({
@@ -52,6 +54,12 @@ function Row({
     </div>
   );
 }
+
+/**
+ * Bağlanabilir sağlayıcılar. Google eklenince buraya TEK satır girer; Supabase
+ * tarafında o sağlayıcının açık olması ayrı bir şart.
+ */
+const OAUTH_PROVIDERS = [{ id: "github", label: "GitHub", Icon: IconGitHub }] as const;
 
 function Card({
   title,
@@ -85,6 +93,68 @@ function Mono({ children }: { children: React.ReactNode }) {
 export default function SettingsPage() {
   const { email, accountId, devices } = useApp();
   const { theme, setTheme } = useTheme();
+
+  // Kimlikler Supabase'den okunur (`user_identities`): oturum jetonundaki
+  // app_metadata bağlama/çözmeden sonra bayat kalır, bu liste her çağrıda taze.
+  // Şifre yalnızca "email" kimliği olan hesapta var: yalnızca GitHub ile girmiş
+  // birinin değiştirecek şifresi yoktur; birleşmiş hesapta "email" de listede
+  // olduğu için düğme çıkar.
+  const { session } = useSession();
+  const [identities, setIdentities] = useState<UserIdentity[] | null>(null);
+  const [identError, setIdentError] = useState<string | null>(null);
+  const [identBusy, setIdentBusy] = useState<string | null>(null);
+  const [unlinkTarget, setUnlinkTarget] = useState<UserIdentity | null>(null);
+
+  const loadIdentities = useCallback(async () => {
+    const { data, error } = await supabase().auth.getUserIdentities();
+    if (error) setIdentError(error.message);
+    else setIdentities(data.identities);
+  }, []);
+
+  useEffect(() => {
+    // Bağlama GitHub'a gidip /settings'e DÖNEREK biter; hata (ör. o GitHub
+    // hesabı başka bir kullanıcıya bağlı) adres çubuğunda gelir.
+    const params = new URLSearchParams(
+      window.location.hash.replace(/^#/, "") || window.location.search,
+    );
+    const description = params.get("error_description");
+    if (description) {
+      setIdentError(description.replace(/\+/g, " "));
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadIdentities();
+  }, [loadIdentities]);
+
+  const providers = (session?.user.app_metadata?.providers as string[] | undefined) ?? [];
+  const hasPassword = identities
+    ? identities.some((i) => i.provider === "email")
+    : providers.includes("email");
+
+  async function handleLink(provider: "github") {
+    setIdentBusy(provider);
+    setIdentError(null);
+    // Başarılıysa tarayıcı sağlayıcıya gider; busy'yi açmaya gerek yok.
+    const { error } = await supabase().auth.linkIdentity({
+      provider,
+      options: { redirectTo: `${window.location.origin}/settings` },
+    });
+    if (error) {
+      setIdentError(error.message);
+      setIdentBusy(null);
+    }
+  }
+
+  async function handleUnlink() {
+    if (!unlinkTarget) return;
+    setIdentBusy(unlinkTarget.provider);
+    setIdentError(null);
+    const { error } = await supabase().auth.unlinkIdentity(unlinkTarget);
+    setUnlinkTarget(null);
+    setIdentBusy(null);
+    if (error) setIdentError(error.message);
+    else await loadIdentities();
+  }
 
   const [account, setAccount] = useState<Account | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +416,56 @@ export default function SettingsPage() {
           </Row>
         </Card>
 
+        {/* --- bağlı hesaplar ------------------------------------------- */}
+        <Card
+          title="Connected accounts"
+          description="Sign-in methods linked to this TraceBox account. Any linked method opens the same account and the same hosts."
+        >
+          {OAUTH_PROVIDERS.map(({ id, label, Icon }) => {
+            const identity = identities?.find((i) => i.provider === id);
+            // Son kimlik çözülemez: hesaba girişin tek yolu kalmaz. Supabase de
+            // reddeder; düğmeyi hiç göstermemek hata mesajından iyidir.
+            const canUnlink = !!identities && identities.length > 1;
+            const email = identity?.identity_data?.email as string | undefined;
+            return (
+              <Row
+                key={id}
+                label={label}
+                hint={
+                  identity
+                    ? `Linked${email ? ` as ${email}` : ""}.`
+                    : identities
+                      ? "Not linked. Linking lets you sign in with this provider as well."
+                      : "Loading…"
+                }
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className="size-[18px] text-muted" />
+                  {identity ? (
+                    <button
+                      onClick={() => setUnlinkTarget(identity)}
+                      disabled={!canUnlink || identBusy !== null}
+                      title={canUnlink ? undefined : "This is your only sign-in method."}
+                      className="rounded-lg border border-line bg-panel px-3.5 py-2 text-sm text-muted transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-muted"
+                    >
+                      Unlink
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleLink(id)}
+                      disabled={!identities || identBusy !== null}
+                      className="rounded-lg border border-line bg-panel-2 px-3.5 py-2 text-sm font-medium transition hover:border-accent disabled:opacity-50"
+                    >
+                      {identBusy === id ? "Redirecting…" : "Link"}
+                    </button>
+                  )}
+                </div>
+              </Row>
+            );
+          })}
+          {identError && <p className="px-5 pb-4 text-xs text-danger">{identError}</p>}
+        </Card>
+
         {/* --- oturum ---------------------------------------------------- */}
         <Card
           title="Session"
@@ -370,22 +490,31 @@ export default function SettingsPage() {
           title="Danger zone"
           description="Actions that affect your sign-in or remove your account."
         >
-          <Row
-            label="Change password"
-            hint="Your current password stops working as soon as the new one is set. Hosts are not affected."
-          >
-            <button
-              onClick={() => {
-                setPwFormError(null);
-                setPwNotice(null);
-                setPwStep("form");
-              }}
-              className="rounded-lg border border-danger/40 px-3.5 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+          {hasPassword ? (
+            <Row
+              label="Change password"
+              hint="Your current password stops working as soon as the new one is set. Hosts are not affected."
             >
-              Change password
-            </button>
-            {pwNotice && <p className="mt-2 text-xs text-ok">{pwNotice}</p>}
-          </Row>
+              <button
+                onClick={() => {
+                  setPwFormError(null);
+                  setPwNotice(null);
+                  setPwStep("form");
+                }}
+                className="rounded-lg border border-danger/40 px-3.5 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+              >
+                Change password
+              </button>
+              {pwNotice && <p className="mt-2 text-xs text-ok">{pwNotice}</p>}
+            </Row>
+          ) : (
+            <Row
+              label="Password"
+              hint="You sign in with GitHub, so there is no password to change."
+            >
+              <span className="text-sm text-muted">Managed by GitHub</span>
+            </Row>
+          )}
           <Row
             label="Delete account"
             hint={`Removes ${devices ? devices.length : "all"} host${devices?.length === 1 ? "" : "s"}, and every metric, log and crash snapshot they ever sent. There is no recovery — not from TraceBox, not from Supabase.`}
@@ -470,6 +599,19 @@ export default function SettingsPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {unlinkTarget && (
+        <ConfirmDialog
+          title={`Unlink ${unlinkTarget.provider === "github" ? "GitHub" : unlinkTarget.provider}?`}
+          warning="You can link it again at any time."
+          confirmLabel="Unlink"
+          busy={identBusy !== null}
+          onConfirm={handleUnlink}
+          onCancel={() => setUnlinkTarget(null)}
+        >
+          You will no longer be able to sign in with this provider. Your hosts and data are not affected, and your other sign-in methods keep working.
+        </ConfirmDialog>
       )}
 
       {pwStep === "confirm" && (
