@@ -30,10 +30,11 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
+import { IconGitHub } from "@/components/icons";
 import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 
 type Mode = "signin" | "signup";
@@ -49,6 +50,42 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+
+  /*
+   * OAuth dönüşü HATALI olabilir: GitHub'da kullanıcı izni reddeder, ya da
+   * hesabın e-postası yoktur (Supabase'de "e-postasız kullanıcı"ya izin
+   * KAPALI — giriş, hesap silme onayı ve künye e-postaya dayanıyor). Supabase
+   * hatayı adres çubuğuna yazar, yani yakalamazsak kullanıcı sebepsiz yere
+   * boş bir giriş formuna düşerdi. Sorgu da parça da (#) okunuyor: hangisine
+   * yazıldığı akış türüne bağlı.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(
+      window.location.hash.replace(/^#/, "") || window.location.search,
+    );
+    const description = params.get("error_description");
+    if (!description) return;
+    setError(description.replace(/\+/g, " "));
+    // Adresi temizle: yenilenince aynı hata yeniden çıkmasın.
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  async function signInWithGitHub() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    // Başarılıysa tarayıcı GitHub'a gider ve sayfa terk edilir; busy'yi geri
+    // açmaya gerek yok. Dönüşte /login'e inilir, oturum varsa sayfa kullanıcıyı
+    // içeri alır (app/login/page.tsx).
+    const { error } = await supabase().auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: `${window.location.origin}/login` },
+    });
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+    }
+  }
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -217,7 +254,27 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
           ))}
         </div>
 
-        <label className="mt-6 block text-sm text-muted" htmlFor="email">
+        {/* --- sağlayıcı ile giriş ------------------------------------------
+            Kayıt ve giriş için AYNI düğme: GitHub hesabı yoksa Supabase onu
+            oluşturur. İki kipte ayrı düğme olması kullanıcıya olmayan bir
+            fark anlatırdı. */}
+        <button
+          type="button"
+          onClick={signInWithGitHub}
+          disabled={busy}
+          className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm font-medium transition hover:border-accent disabled:opacity-50"
+        >
+          <IconGitHub className="size-[18px]" />
+          Continue with GitHub
+        </button>
+
+        <div className="mt-5 flex items-center gap-3 text-xs text-faint">
+          <span className="h-px flex-1 bg-line" />
+          or
+          <span className="h-px flex-1 bg-line" />
+        </div>
+
+        <label className="mt-5 block text-sm text-muted" htmlFor="email">
           Email
         </label>
         <input
