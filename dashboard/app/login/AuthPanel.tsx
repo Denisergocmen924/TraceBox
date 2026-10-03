@@ -33,11 +33,10 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PasswordInput } from "@/components/PasswordInput";
+import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 
 type Mode = "signin" | "signup";
-
-/** Supabase'in varsayılan alt sınırı 6; kayıt olurken 8 istiyoruz. */
-const MIN_PASSWORD = 8;
 
 const field =
   "mt-2 w-full rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm outline-none transition focus:border-accent";
@@ -66,6 +65,12 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
 
     /* --- kurtarma: yeni şifreyi belirle ------------------------------- */
     if (recovery) {
+      const problem = passwordProblem(password);
+      if (problem) {
+        setError(problem);
+        setBusy(false);
+        return;
+      }
       const { error } = await supabase().auth.updateUser({ password });
       if (error) setError(error.message);
       else setNotice("Password updated. Taking you to your hosts…");
@@ -75,6 +80,13 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
 
     /* --- kayıt --------------------------------------------------------- */
     if (mode === "signup") {
+      // Giriş kipinde kural YOK: eski, daha zayıf şifreli hesaplar girebilmeli.
+      const problem = passwordProblem(password);
+      if (problem) {
+        setError(problem);
+        setBusy(false);
+        return;
+      }
       const { error } = await supabase().auth.signUp({
         email,
         password,
@@ -152,20 +164,16 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         <label className="mt-6 block text-sm text-muted" htmlFor="new-password">
           New password
         </label>
-        <input
+        <PasswordInput
           id="new-password"
           name="new-password"
-          type="password"
           required
-          minLength={MIN_PASSWORD}
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className={field}
+          wrapperClassName="mt-2"
         />
-        <p className="mt-1.5 text-xs text-faint">
-          At least {MIN_PASSWORD} characters.
-        </p>
+        <p className="mt-1.5 text-xs text-faint">{PASSWORD_RULE_HINT}</p>
 
         {error && (
           <p className="mt-4 text-sm text-danger" role="alert">
@@ -245,23 +253,19 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
             </button>
           )}
         </div>
-        <input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           required
-          minLength={mode === "signup" ? MIN_PASSWORD : undefined}
           autoComplete={
             mode === "signup" ? "new-password" : "current-password"
           }
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className={field}
+          wrapperClassName="mt-2"
         />
         {mode === "signup" && (
-          <p className="mt-1.5 text-xs text-faint">
-            At least {MIN_PASSWORD} characters.
-          </p>
+          <p className="mt-1.5 text-xs text-faint">{PASSWORD_RULE_HINT}</p>
         )}
 
         {error && (

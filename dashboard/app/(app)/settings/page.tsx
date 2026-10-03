@@ -26,8 +26,10 @@ import { supabase } from "@/lib/supabase";
 import { deleteAccount } from "@/lib/collector";
 import { localDateTime } from "@/lib/time";
 import { errorMessage } from "@/lib/errors";
+import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PasswordInput } from "@/components/PasswordInput";
 import { IconLogout, IconMoon, IconSun, IconTrash } from "@/components/icons";
 
 /** Künye satırı: solda etiket + gerekçe, sağda değer. */
@@ -108,6 +110,73 @@ export default function SettingsPage() {
     } catch (e) {
       setDeleteError(errorMessage(e));
       setDeleteBusy(false);
+    }
+  }
+
+  // Şifre değiştirme — oturum AÇIKKEN (giriş ekranındaki e-posta bağlantılı
+  // kurtarma akışından ayrı bir giriş noktası). Alanlar sayfada, onay pencere
+  // olarak: form yanlışlıkla submit edilirse şifre hemen değişmesin.
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [repeatPw, setRepeatPw] = useState("");
+  const [pwFormError, setPwFormError] = useState<string | null>(null);
+  const [pwNotice, setPwNotice] = useState<string | null>(null);
+  // null = kapalı · "form" = alanlar penceresi · "confirm" = §9.10 onayı.
+  // Aynı anda tek pencere: ConfirmDialog Enter'ı iptal sayar, altta bir form
+  // açık kalsaydı Enter iki pencereyi birden çatıştırırdı.
+  const [pwStep, setPwStep] = useState<"form" | "confirm" | null>(null);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+
+  function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPwNotice(null);
+    // Kural ihlalleri pencereyi hiç açmaz: kullanıcıyı boşuna "emin misin"
+    // aşamasına sokup orada reddetmek kötü bir sıra olurdu.
+    const problem = passwordProblem(newPw);
+    if (problem) {
+      setPwFormError(problem);
+    } else if (newPw !== repeatPw) {
+      setPwFormError("The two new passwords do not match.");
+    } else if (newPw === currentPw) {
+      setPwFormError("The new password must differ from the current one.");
+    } else {
+      setPwFormError(null);
+      setPwError(null);
+      setPwStep("confirm");
+    }
+  }
+
+  async function handleChangePassword() {
+    setPwBusy(true);
+    setPwError(null);
+    try {
+      // Önce mevcut şifreyi KANITLAT. `updateUser` açık bir oturumla yeni
+      // şifreyi mevcut şifreyi sormadan da kabul eder; yani açık kalmış bir
+      // tarayıcıya erişen biri hesabı kalıcı olarak ele geçirebilirdi.
+      const { error: verifyError } = await supabase().auth.signInWithPassword({
+        email,
+        password: currentPw,
+      });
+      if (verifyError) {
+        // Giriş ekranındaki aynı çeviri: Supabase'in ham mesajı yanıltıcı.
+        throw new Error(
+          verifyError.message === "Invalid login credentials"
+            ? "Your current password is incorrect."
+            : verifyError.message,
+        );
+      }
+      const { error } = await supabase().auth.updateUser({ password: newPw });
+      if (error) throw error;
+      setCurrentPw("");
+      setNewPw("");
+      setRepeatPw("");
+      setPwStep(null);
+      setPwNotice("Password updated.");
+    } catch (e) {
+      setPwError(errorMessage(e));
+    } finally {
+      setPwBusy(false);
     }
   }
 
@@ -299,8 +368,24 @@ export default function SettingsPage() {
         {/* --- yıkıcı işlem: hesap silme (§9.10) -------------------------- */}
         <Card
           title="Danger zone"
-          description="Deletes your account and everything under it — nothing kept."
+          description="Actions that affect your sign-in or remove your account."
         >
+          <Row
+            label="Change password"
+            hint="Your current password stops working as soon as the new one is set. Hosts are not affected."
+          >
+            <button
+              onClick={() => {
+                setPwFormError(null);
+                setPwNotice(null);
+                setPwStep("form");
+              }}
+              className="rounded-lg border border-danger/40 px-3.5 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+            >
+              Change password
+            </button>
+            {pwNotice && <p className="mt-2 text-xs text-ok">{pwNotice}</p>}
+          </Row>
           <Row
             label="Delete account"
             hint={`Removes ${devices ? devices.length : "all"} host${devices?.length === 1 ? "" : "s"}, and every metric, log and crash snapshot they ever sent. There is no recovery — not from TraceBox, not from Supabase.`}
@@ -318,6 +403,93 @@ export default function SettingsPage() {
           </Row>
         </Card>
       </div>
+
+      {pwStep === "form" && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[2px]"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setPwStep(null);
+          }}
+          onKeyDown={(e) => e.key === "Escape" && setPwStep(null)}
+        >
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-label="Change password"
+            onSubmit={handlePasswordSubmit}
+            className="w-full max-w-md rounded-card border border-line bg-panel p-6 shadow-xl"
+          >
+            <h2 className="font-semibold">Change password</h2>
+            <div className="mt-4 space-y-4">
+              {(
+                [
+                  { id: "current-password", label: "Current password", value: currentPw, set: setCurrentPw, auto: "current-password" },
+                  { id: "new-password", label: "New password", value: newPw, set: setNewPw, auto: "new-password" },
+                  { id: "repeat-password", label: "Repeat new password", value: repeatPw, set: setRepeatPw, auto: "new-password" },
+                ] as const
+              ).map(({ id, label, value, set, auto }, i) => (
+                <div key={id}>
+                  <label htmlFor={id} className="block text-sm text-muted">
+                    {label}
+                  </label>
+                  <PasswordInput
+                    id={id}
+                    name={id}
+                    required
+                    autoFocus={i === 0}
+                    autoComplete={auto}
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                    wrapperClassName="mt-1.5"
+                  />
+                </div>
+              ))}
+              <p className="text-xs text-faint">{PASSWORD_RULE_HINT}</p>
+            </div>
+
+            {pwFormError && (
+              <p className="mt-4 text-sm text-danger" role="alert">
+                {pwFormError}
+              </p>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPwStep(null)}
+                className="rounded-lg border border-line px-4 py-2 text-sm text-muted transition hover:bg-panel-2 hover:text-fg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-strong"
+              >
+                Continue
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {pwStep === "confirm" && (
+        <ConfirmDialog
+          title="Change password"
+          confirmLabel="Change password"
+          // §9.10: şifre değiştirme "geri alınamaz" DEMEZ — söylenen gerçek
+          // "mevcut şifren geçersiz olacak".
+          warning="Your current password will stop working. Do you want to continue?"
+          busy={pwBusy}
+          error={pwError}
+          onConfirm={handleChangePassword}
+          onCancel={() => setPwStep("form")}
+        >
+          <p>
+            You will need the new password the next time you sign in. Hosts are
+            not affected — they authenticate with their own device keys.
+          </p>
+        </ConfirmDialog>
+      )}
 
       {deleteStep === "type" && (
         <ConfirmDialog
