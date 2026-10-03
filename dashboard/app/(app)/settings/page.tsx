@@ -28,11 +28,12 @@ import { deleteAccount } from "@/lib/collector";
 import { localDateTime } from "@/lib/time";
 import { errorMessage } from "@/lib/errors";
 import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
+import { OAUTH_PROVIDERS, providerLabel, type OAuthProviderId } from "@/lib/oauthProviders";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
 import type { UserIdentity } from "@supabase/supabase-js";
-import { IconGitHub, IconLogout, IconMoon, IconSun, IconTrash } from "@/components/icons";
+import { IconMoon, IconSun, IconTrash } from "@/components/icons";
 
 /** Künye satırı: solda etiket + gerekçe, sağda değer. */
 function Row({
@@ -54,12 +55,6 @@ function Row({
     </div>
   );
 }
-
-/**
- * Bağlanabilir sağlayıcılar. Google eklenince buraya TEK satır girer; Supabase
- * tarafında o sağlayıcının açık olması ayrı bir şart.
- */
-const OAUTH_PROVIDERS = [{ id: "github", label: "GitHub", Icon: IconGitHub }] as const;
 
 function Card({
   title,
@@ -131,7 +126,13 @@ export default function SettingsPage() {
     ? identities.some((i) => i.provider === "email")
     : providers.includes("email");
 
-  async function handleLink(provider: "github") {
+  // Şifresiz hesapta "GitHub", "Google" ya da "GitHub and Google".
+  const signInNames =
+    (identities ?? [])
+      .map((i) => providerLabel(i.provider))
+      .join(" and ") || "your provider";
+
+  async function handleLink(provider: OAuthProviderId) {
     setIdentBusy(provider);
     setIdentError(null);
     // Başarılıysa tarayıcı sağlayıcıya gider; busy'yi açmaya gerek yok.
@@ -262,8 +263,6 @@ export default function SettingsPage() {
     };
   }, []);
 
-  const collectorUrl = process.env.NEXT_PUBLIC_COLLECTOR_URL ?? null;
-
   return (
     <div className="mx-auto max-w-[900px]">
       <PageHeader
@@ -393,29 +392,6 @@ export default function SettingsPage() {
           </Row>
         </Card>
 
-        {/* --- bağlantılar ---------------------------------------------- */}
-        <Card
-          title="Connections"
-          description="Where this dashboard talks to, and where it deliberately does not."
-        >
-          <Row
-            label="Collector"
-            hint="Used for exactly one request: creating a host and minting its key. Everything you read comes straight from the database instead."
-          >
-            {collectorUrl ? (
-              <Mono>{collectorUrl}</Mono>
-            ) : (
-              <span className="text-danger">not configured</span>
-            )}
-          </Row>
-          <Row
-            label="Database"
-            hint="Read directly from the browser over your session, filtered by row-level security. Live log updates ride the same connection."
-          >
-            <Mono>{process.env.NEXT_PUBLIC_SUPABASE_URL ?? "—"}</Mono>
-          </Row>
-        </Card>
-
         {/* --- bağlı hesaplar ------------------------------------------- */}
         <Card
           title="Connected accounts"
@@ -424,7 +400,7 @@ export default function SettingsPage() {
           {/* Unlink yalnızca TraceBox'taki bağlantıyı siler; sağlayıcıdaki izin
               (grant) onda kalır. Bu HER OAuth sağlayıcısı için geçerli, o yüzden
               not satır başına değil kartın başında. */}
-          <p className="border-b border-line px-5 py-3 text-xs text-muted">
+          <p className="border-b border-line px-5 py-3 text-xs text-danger/80">
             Unlinking only removes the connection on TraceBox. To fully revoke access, also
             remove TraceBox from the provider&apos;s own settings. Signing in again with the
             same verified email links it back automatically.
@@ -474,25 +450,6 @@ export default function SettingsPage() {
           {identError && <p className="px-5 pb-4 text-xs text-danger">{identError}</p>}
         </Card>
 
-        {/* --- oturum ---------------------------------------------------- */}
-        <Card
-          title="Session"
-          description="Signing out clears this browser only; your agents keep shipping."
-        >
-          <Row
-            label="Sign out"
-            hint="Hosts authenticate with their own device keys, so nothing stops collecting while you are away."
-          >
-            <button
-              onClick={() => supabase().auth.signOut()}
-              className="flex items-center gap-2 rounded-lg border border-line bg-panel px-3.5 py-2 text-sm text-muted transition hover:border-danger/40 hover:text-danger"
-            >
-              <IconLogout className="size-4" />
-              Sign out
-            </button>
-          </Row>
-        </Card>
-
         {/* --- yıkıcı işlem: hesap silme (§9.10) -------------------------- */}
         <Card
           title="Danger zone"
@@ -518,9 +475,9 @@ export default function SettingsPage() {
           ) : (
             <Row
               label="Password"
-              hint="You sign in with GitHub, so there is no password to change."
+              hint={`You sign in with ${signInNames}, so there is no password to change.`}
             >
-              <span className="text-sm text-muted">Managed by GitHub</span>
+              <span className="text-sm text-muted">Managed by {signInNames}</span>
             </Row>
           )}
           <Row
@@ -611,7 +568,7 @@ export default function SettingsPage() {
 
       {unlinkTarget && (
         <ConfirmDialog
-          title={`Unlink ${unlinkTarget.provider === "github" ? "GitHub" : unlinkTarget.provider}?`}
+          title={`Unlink ${providerLabel(unlinkTarget.provider)}?`}
           warning="You can link it again at any time."
           confirmLabel="Unlink"
           busy={identBusy !== null}
