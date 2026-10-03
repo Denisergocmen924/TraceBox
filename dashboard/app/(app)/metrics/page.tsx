@@ -27,6 +27,7 @@ import { useApp } from "@/lib/appState";
 import { deviceStatus, type Device } from "@/lib/devices";
 import { PageHeader, Tally } from "@/components/PageHeader";
 import { Timeline } from "@/components/Timeline";
+import { EmptyState } from "@/components/EmptyState";
 
 /**
  * Aynı anda çizilecek en çok makine sayısı.
@@ -79,10 +80,13 @@ export default function MetricsPage() {
       )}
 
       {devices && scoped.length === 0 && (
-        <p className="rounded-card border border-line bg-panel p-12 text-center text-sm text-muted shadow-card">
+        <EmptyState
+          mascot={devices.length === 0 ? "metrics" : "shrug"}
+          title={devices.length === 0 ? "No hosts yet." : undefined}
+        >
           {devices.length === 0 ? (
             <>
-              No hosts yet. Add one from{" "}
+              Add one from{" "}
               <Link href="/devices" className="font-medium text-accent">
                 Hosts
               </Link>{" "}
@@ -91,7 +95,7 @@ export default function MetricsPage() {
           ) : (
             "The selected host is not in this account any more."
           )}
-        </p>
+        </EmptyState>
       )}
 
       <div className="space-y-6">

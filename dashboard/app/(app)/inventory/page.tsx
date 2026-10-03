@@ -48,6 +48,7 @@ import { errorMessage } from "@/lib/errors";
 import { PageHeader, Tally } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { IconChevron } from "@/components/icons";
+import { EmptyState } from "@/components/EmptyState";
 
 /** Boş bir alanın yerine tire — hücre boş kalırsa kart çökmüş gibi görünüyor. */
 function Cell({ value }: { value: string | number | null | undefined }) {
@@ -157,10 +158,13 @@ export default function InventoryPage() {
       )}
 
       {rows && scoped.length === 0 && (
-        <p className="rounded-card border border-line bg-panel p-12 text-center text-sm text-muted shadow-card">
+        <EmptyState
+          mascot={rows.length === 0 ? "inventory" : "shrug"}
+          title={rows.length === 0 ? "No hosts yet." : undefined}
+        >
           {rows.length === 0 ? (
             <>
-              No hosts yet. Add one from{" "}
+              Add one from{" "}
               <Link href="/devices" className="font-medium text-accent">
                 Hosts
               </Link>
@@ -169,7 +173,7 @@ export default function InventoryPage() {
           ) : (
             "The selected host is not in this account any more."
           )}
-        </p>
+        </EmptyState>
       )}
 
       {rows && scoped.length > 0 && (
