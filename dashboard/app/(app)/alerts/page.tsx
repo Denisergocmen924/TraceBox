@@ -63,7 +63,7 @@ function Row({ alert, now }: { alert: Alert; now: number }) {
     <li className="border-t border-line first:border-t-0">
       <Link
         href={`/devices/${alert.deviceId}`}
-        className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-panel-2"
+        className="flex items-center gap-3 px-4 sm:px-5 py-3.5 transition hover:bg-panel-2"
       >
         {/* Soldaki renk şeridi: göz listeyi tararken ciddiyeti rozeti okumadan
             yakalıyor. Rozet yine duruyor — renk tek başına erişilebilir değil. */}
@@ -167,7 +167,7 @@ export default function AlertsPage() {
             key={severity}
             className="overflow-hidden rounded-card border border-line bg-panel shadow-card"
           >
-            <div className="flex items-center gap-2.5 border-b border-line px-5 py-4">
+            <div className="flex items-center gap-2.5 border-b border-line px-4 sm:px-5 py-4">
               <h2 className="text-[15px] font-semibold">
                 {SEVERITY_LABEL[severity]}
               </h2>

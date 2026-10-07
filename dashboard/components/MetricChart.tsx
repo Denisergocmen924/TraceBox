@@ -104,7 +104,7 @@ export function MetricChart({
   const hoverX = hovered ? x(Date.parse(hovered.bucket_start)) : null;
 
   /** Fare imlecinin altındaki an. Kutunun dışına taşarsa uçlara kırpılır. */
-  function timeAt(event: React.MouseEvent<HTMLDivElement>): number {
+  function timeAt(event: React.PointerEvent<HTMLDivElement>): number {
     const box = event.currentTarget.getBoundingClientRect();
     const fraction = (event.clientX - box.left) / box.width;
     const t = fromMs + Math.min(1, Math.max(0, fraction)) * viewSpan;
@@ -114,7 +114,7 @@ export function MetricChart({
     return Math.min(t, toMs);
   }
 
-  function handleMove(event: React.MouseEvent<HTMLDivElement>) {
+  function handleMove(event: React.PointerEvent<HTMLDivElement>) {
     const t = timeAt(event);
     onHoverTime(t);
     // Seçim sürerken imleç de çalışmaya devam ediyor: kullanıcı neyi seçmek
@@ -147,10 +147,11 @@ export function MetricChart({
         <div className="min-w-0 flex-1">
           <div
             className="relative cursor-crosshair select-none border-b border-l border-line"
-            style={{ height: `${height}px` }}
-            onMouseMove={handleMove}
-            onMouseLeave={() => onHoverTime(null)}
-            onMouseDown={(event) => {
+            // Dikey kaydırma tarayıcıda kalır, yatay sürükleme seçime gider.
+            style={{ height: `${height}px`, touchAction: "pan-y" }}
+            onPointerMove={handleMove}
+            onPointerLeave={() => onHoverTime(null)}
+            onPointerDown={(event) => {
               // Sol tuş dışındaki düğmeler seçim başlatmaz: sağ tuş bağlam
               // menüsünü açar ve orta tuş bazı tarayıcılarda otomatik
               // kaydırmaya geçer — ikisi de yarım kalmış bir seçim bırakırdı.
@@ -182,7 +183,10 @@ export function MetricChart({
               viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
               preserveAspectRatio="none"
               aria-hidden="true"
-              className="absolute inset-0 size-full"
+              // Anahtar pencere genişliği: canlı kenar kayarken genişlik
+              // sabit kalır ve çizgi yeniden açılmaz; pencere değişince açılır.
+              key={Math.round(span / 1000)}
+              className="chart-reveal absolute inset-0 size-full"
             >
               {/* Bantlar ÖNCE, hepsi birden: çizgilerin altında kalsınlar.
                   İz iz (bant, çizgi) çizilseydi ikinci izin bandı birinci izin
@@ -285,6 +289,31 @@ export function MetricChart({
                       top: `${(y(band.avg * track.scale) / VIEW_H) * 100}%`,
                     }}
                   />
+                );
+              })}
+
+            {/* Canlı uç: her izin son noktasında nabız atan nokta. */}
+            {hovered == null &&
+              tracks.map((track) => {
+                const seg = track.segments[track.segments.length - 1];
+                const last = seg?.[seg.length - 1];
+                if (!last) return null;
+                return (
+                  <span
+                    key={`tail-${track.key}`}
+                    className="pointer-events-none absolute"
+                    style={{
+                      left: `${(x(last.t) / VIEW_W) * 100}%`,
+                      top: `${(y(last.avg) / VIEW_H) * 100}%`,
+                    }}
+                  >
+                    <span
+                      className={`chart-pulse absolute size-2.5 rounded-full ${track.tone.bar}`}
+                    />
+                    <span
+                      className={`absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-panel ${track.tone.bar}`}
+                    />
+                  </span>
                 );
               })}
 

@@ -24,7 +24,6 @@ import {
   formatBitratePair,
   formatPercent,
 } from "@/lib/metrics";
-import { IconCpu, IconDisk, IconMemory, IconNetwork } from "@/components/icons";
 
 /** null'ları atarak ortalama; hiç sayı yoksa null. */
 function mean(values: (number | null)[]): number | null {
@@ -33,11 +32,6 @@ function mean(values: (number | null)[]): number | null {
   return numbers.reduce((a, b) => a + b, 0) / numbers.length;
 }
 
-const ICONS = {
-  cpu: IconCpu,
-  ram: IconMemory,
-  disk: IconDisk,
-} as const;
 
 function Card({
   icon,
@@ -58,27 +52,22 @@ function Card({
   barTone: string;
 }) {
   return (
-    <div className="rounded-card border border-line bg-panel p-5 shadow-card">
-      <div className="flex items-center gap-3">
-        <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${chip}`}>
-          {icon}
-        </span>
-        <span className="text-sm font-medium text-muted">{label}</span>
-      </div>
-
-      <p className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">
+    <div className="rise bg-panel p-4 sm:p-5">
+      <p className="flex items-center gap-2 text-xs font-medium text-muted">
+        <span className={`size-1.5 rounded-full ${chip}`} />
+        {label}
+      </p>
+      <p className="mt-3 font-mono text-[26px] leading-none font-medium tracking-tight tabular-nums">
         {value}
       </p>
-
       {bar != null && (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-panel-2">
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-panel-2">
           <div
-            className={`h-full rounded-full transition-[width] duration-500 ${barTone}`}
+            className={`h-full rounded-full transition-[width] duration-700 ease-out ${barTone}`}
             style={{ width: `${Math.min(100, Math.max(0, bar))}%` }}
           />
         </div>
       )}
-
       <p className="mt-2 text-xs text-faint">{hint}</p>
     </div>
   );
@@ -114,9 +103,8 @@ export function SummaryCards({
       : formatBitratePair(netSent, netRecv);
 
   return (
-    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card xl:grid-cols-4">
       {SERIES.map((series) => {
-        const Icon = ICONS[series.key];
         const average = mean(
           live.map((d) =>
             d.latest ? series.percent(d.latest, d.ram_total_mb) : null,
@@ -129,8 +117,8 @@ export function SummaryCards({
         return (
           <Card
             key={series.key}
-            icon={<Icon className="size-[18px]" />}
-            chip={series.tone.chip}
+            icon={null}
+            chip={series.tone.bar}
             label={series.label}
             value={average == null ? "—" : formatPercent(average)}
             hint={hint}
@@ -141,8 +129,8 @@ export function SummaryCards({
       })}
 
       <Card
-        icon={<IconNetwork className="size-[18px]" />}
-        chip="bg-net/10 text-net"
+        icon={null}
+        chip="bg-net"
         label="Network"
         // Ağın tavanı yok: %90 dolu bir ağ kartı diye bir şey ölçmüyoruz.
         // Bu yüzden çubuk da yok, ok işaretleriyle yön veriliyor.

@@ -146,10 +146,10 @@ export function DetailPanel({
   }
 
   return (
-    <aside className="space-y-5 lg:sticky lg:top-22">
+    <aside className="order-first space-y-4 lg:order-none lg:sticky lg:top-22 lg:space-y-5">
       <section className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
         <div className="flex items-start gap-3 p-5">
-          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+          <span className="grid size-10 shrink-0 place-items-center rounded-md bg-panel-2 text-fg">
             <IconServer className="size-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -216,7 +216,7 @@ export function DetailPanel({
         <button
           onClick={() => send(device.logging_enabled ? "pause" : "resume")}
           disabled={busy || togglePending || deletePending}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm font-medium transition hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-line bg-panel-2 px-3 py-3 text-sm lg:py-2.5 font-medium transition hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {device.logging_enabled ? (
             <IconPause className="size-4" />
@@ -240,7 +240,7 @@ export function DetailPanel({
             setDialog("delete");
           }}
           disabled={busy || deletePending}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-danger/40 px-3 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-danger/40 px-3 py-3 lg:py-2.5 text-sm font-medium text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <IconTrash className="size-4" />
           {deletePending ? "Delete queued" : "Delete"}

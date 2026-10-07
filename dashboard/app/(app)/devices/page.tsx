@@ -102,7 +102,7 @@ export default function DevicesPage() {
         </h2>
         <button
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-card transition hover:bg-accent-strong"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-3 text-sm font-medium text-white sm:py-2.5 shadow-card transition hover:bg-accent-strong"
         >
           <IconPlus className="size-4" />
           Add Host

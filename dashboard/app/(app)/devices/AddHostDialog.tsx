@@ -160,7 +160,7 @@ export function AddHostDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 grid items-end sm:place-items-center overflow-y-auto bg-slate-950/50 p-0 sm:p-4 backdrop-blur-[2px]"
       onMouseDown={(event) => {
         if (!locked && !busy && event.target === event.currentTarget) onClose();
       }}
@@ -169,11 +169,11 @@ export function AddHostDialog({
         role="dialog"
         aria-modal="true"
         aria-label={locked ? "Host key" : "Add host"}
-        className="w-full max-w-lg rounded-card border border-line bg-panel p-6 shadow-xl"
+        className="safe-bottom rise w-full max-w-lg rounded-t-xl sm:rounded-card border border-line bg-panel p-6 shadow-xl"
       >
         {/* --- başlık ---------------------------------------------------- */}
         <div className="flex items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+          <span className="grid size-9 shrink-0 place-items-center rounded-md bg-panel-2 text-fg">
             <IconKey className="size-[18px]" />
           </span>
           <div className="min-w-0 flex-1">

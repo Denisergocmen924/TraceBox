@@ -22,21 +22,21 @@
    * Önceki turda zemin belirgin biçimde daha koyuydu (#f5f6f9) — kartları
    * ayırmak için gereğinden fazla kontrast, referansta yok.
    */
-  --color-bg: #fcfcfe;
-  --color-bg-soft: #fcfcfe;
+  --color-bg: #f6f6f3;
+  --color-bg-soft: #f6f6f3;
   --color-panel: #ffffff;
-  --color-panel-2: #f4f5f8; /* panel İÇİ vurgusuz yüzey: input, çubuk yatağı */
-  --color-line: #eef0f5;
+  --color-panel-2: #efeeea; /* panel İÇİ vurgusuz yüzey: input, çubuk yatağı */
+  --color-line: #e4e2dc;
 
   /* --- metin ------------------------------------------------------------- */
-  --color-fg: #101828;
-  --color-muted: #475467;
-  --color-faint: #98a2b3; /* eksen etiketi, log kaynağı — muted'in altı */
+  --color-fg: #15171c;
+  --color-muted: #4d5260;
+  --color-faint: #868b98; /* eksen etiketi, log kaynağı — muted'in altı */
 
   /* --- birincil aksiyon: mor --------------------------------------------- */
-  --color-accent: #6647ef; /* ölçüldü: seçili menü yazısı */
-  --color-accent-strong: #5636e0;
-  --color-accent-soft: #f1eefd; /* ölçüldü: seçili menü hapının zemini */
+  --color-accent: #2a55e5; /* ölçüldü: seçili menü yazısı */
+  --color-accent-strong: #1f43c4;
+  --color-accent-soft: #e6ecfc; /* ölçüldü: seçili menü hapının zemini */
 
   /* --- durum renkleri ----------------------------------------------------
    * Her birinin bir de "soft" zemini var: referansın rozetleri (Healthy,
@@ -64,7 +64,7 @@
    * döner ve yanında bir uyarı üçgeni belirir (DeviceCard). Renk körü bir
    * kullanıcı için de, turuncu bir çubuğa bakan biri için de sinyal ayakta.
    */
-  --color-cpu: #7c5cf6;
+  --color-cpu: #6d4ee0;
   --color-cpu-soft: #efeafe;
   --color-ram: #16b364;
   --color-ram-soft: #e5f8ed;
@@ -92,7 +92,7 @@
   --color-net-out: #d6248b;
   --color-net-out-soft: #fdeaf4;
 
-  --radius-card: 0.75rem; /* tüm kartlarda AYNI yarıçap — referansta 12px */
+  --radius-card: 0.5rem; /* tüm kartlarda AYNI yarıçap — referansta 12px */
 
   /*
    * Kart gölgesi çok hafif. Açık temada kartı zeminden ayıran şey neredeyse
@@ -120,9 +120,9 @@
   --color-muted: #8794ad;
   --color-faint: #5a6580;
 
-  --color-accent: #7c6cff;
-  --color-accent-strong: #6b5aff;
-  --color-accent-soft: #1e2350;
+  --color-accent: #7a9bff;
+  --color-accent-strong: #6486f5;
+  --color-accent-soft: #172247;
 
   --color-ok: #22c55e;
   --color-ok-soft: #0c2c1e;
@@ -310,6 +310,103 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .logo-shake {
+    animation: none;
+  }
+}
+
+/*
+ * Telefon: güvenli alan boşlukları ve alt sekme çubuğunun yüksekliği.
+ * İçerik alt çubuğun altında kalmasın diye main'e pay bırakılıyor.
+ */
+:root {
+  --tabbar-h: 3.75rem;
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * CANLI GRAFİK — çizgi soldan sağa açılır (clip-path; yalnızca bir kez,
+ * veri değişince değil pencere değişince yeniden oynar), uçtaki nokta
+ * nabız atar. Yalnızca transform/opacity/clip-path.
+ */
+@keyframes chart-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.chart-reveal {
+  animation: chart-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes chart-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.2);
+    opacity: 0;
+  }
+}
+.chart-pulse {
+  animation: chart-pulse 1.8s ease-out infinite;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.row-in {
+  animation: row-in 300ms ease-out both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-reveal,
+  .chart-pulse,
+  .row-in,
+  .rise {
+    animation: none;
+  }
+}
+
+/* Veri yolu okları: sağlıklı durakta kesikler akar. */
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+.flow-dash {
+  animation: flow-dash 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-dash {
     animation: none;
   }
 }

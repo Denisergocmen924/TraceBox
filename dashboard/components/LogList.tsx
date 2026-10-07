@@ -30,6 +30,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useApp } from "@/lib/appState";
 import { LiveLock } from "./LiveLock";
@@ -111,39 +112,118 @@ function Line({
   /** Yalnızca hesap genelinde dolu; cihaz detayında sütun hiç çizilmiyor. */
   hostName?: string;
 }) {
+  const [open, setOpen] = useState(false);
+
+  /* Telefonda satır yalnızca BAŞLIK (tek satır, kısaltılmış); dokununca tam
+     metin küçük bir pencerede açılır. Geniş ekranda satır olduğu gibi. */
+  function openDetail() {
+    if (window.matchMedia("(max-width: 639px)").matches) setOpen(true);
+  }
+
   return (
-    <li className="flex gap-3 px-5 py-2.5 text-xs leading-relaxed transition hover:bg-panel-2/50">
-      <span className="w-16 shrink-0 pt-0.5 font-mono tabular-nums text-faint">
+    <li
+      className="row-in flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px] leading-relaxed transition hover:bg-panel-2/50 max-sm:cursor-pointer max-sm:active:bg-panel-2 sm:flex-nowrap sm:items-start sm:px-5 sm:py-2.5 sm:text-xs"
+      onClick={openDetail}
+    >
+      <span className="shrink-0 font-mono tabular-nums text-faint sm:w-16 sm:pt-0.5">
         {logTime(row.measured_at, now)}
       </span>
       {hostName !== undefined && (
         /* Makine adı BAĞLANTI: bir hata satırı görüldüğünde bir sonraki soru
-           her zaman "o makinede başka ne oluyordu" ve cevabı cihaz detayında.
-           Adı düz metin olsaydı kullanıcı listeye geri dönüp makineyi elle
-           bulmak zorunda kalırdı. */
+           her zaman "o makinede başka ne oluyordu" ve cevabı cihaz detayında. */
         <Link
           href={`/devices/${row.device_id}`}
           title={hostName}
-          className="w-28 shrink-0 truncate pt-0.5 font-medium text-accent transition hover:text-accent-strong"
+          onClick={(e) => e.stopPropagation()}
+          className="max-w-32 shrink-0 truncate font-medium text-accent transition hover:text-accent-strong sm:w-28 sm:max-w-none sm:pt-0.5"
         >
           {hostName}
         </Link>
       )}
       <span
-        className={`h-fit w-20 shrink-0 rounded-md border px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide ${LEVEL_STYLE[row.level]}`}
+        className={`h-fit shrink-0 rounded-md border px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide sm:w-20 ${LEVEL_STYLE[row.level]}`}
       >
         {row.level}
       </span>
       <span
-        className="w-24 shrink-0 truncate pt-0.5 font-mono text-muted"
+        className="min-w-0 max-w-32 shrink truncate font-mono text-muted sm:w-24 sm:max-w-none sm:shrink-0 sm:pt-0.5"
         title={row.source ?? ""}
       >
         {row.source ?? "—"}
       </span>
-      <span className="min-w-0 whitespace-pre-wrap break-words pt-0.5 font-mono">
+      <span className="basis-full truncate font-mono sm:min-w-0 sm:basis-auto sm:flex-1 sm:overflow-visible sm:whitespace-pre-wrap sm:break-words sm:pt-0.5">
         {row.message}
       </span>
+      {open && (
+        <LogDetail
+          row={row}
+          now={now}
+          hostName={hostName}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </li>
+  );
+}
+
+/** Dokunulan logun tam metnini gösteren küçük pencere (yalnızca telefon). */
+function LogDetail({
+  row,
+  now,
+  hostName,
+  onClose,
+}: {
+  row: LogRow;
+  now: number;
+  hostName?: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Log message"
+      className="fixed inset-0 z-50 grid items-end bg-fg/40 backdrop-blur-[2px]"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="safe-bottom rise max-h-[75vh] overflow-y-auto rounded-t-xl border border-line bg-panel p-4 shadow-xl">
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${LEVEL_STYLE[row.level]}`}
+          >
+            {row.level}
+          </span>
+          <span className="font-mono text-xs tabular-nums text-faint">
+            {logTime(row.measured_at, now)}
+          </span>
+          <button
+            autoFocus
+            onClick={onClose}
+            className="ml-auto rounded-md border border-line bg-panel-2 px-3 py-2 text-sm font-medium"
+          >
+            Close
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-muted">
+          {[hostName, row.source].filter(Boolean).join(" · ") || "—"}
+        </p>
+        <p className="mt-2 whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed">
+          {row.message}
+        </p>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -503,12 +583,12 @@ export function LogList({
           kaydırılabilir — kırpılıp son seçeneği gizlemek, "critical" satırını
           hiç bulunamaz yapardı.
         */}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 overflow-x-auto rounded-lg border border-line bg-bg-soft p-0.5">
+        <div className="flex w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-md sm:ml-auto sm:w-auto border border-line bg-bg-soft p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f}
               onClick={() => setLevel(f)}
-              className={`shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+              className={`shrink-0 rounded-md px-3 py-2 text-xs font-medium transition sm:px-2.5 sm:py-1.5 ${
                 level === f ? "bg-accent text-white" : "text-muted hover:text-fg"
               }`}
             >

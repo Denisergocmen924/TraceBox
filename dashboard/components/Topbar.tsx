@@ -90,11 +90,11 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const selected = devices?.find((d) => d.id === hostFilter) ?? null;
 
   return (
-    <header className="sticky top-0 z-20 flex h-20 items-center gap-3 border-b border-line bg-bg-soft px-4 sm:px-6">
+    <header className="sticky top-0 z-20 flex h-14 lg:h-20 items-center gap-2 border-b border-line bg-bg/90 backdrop-blur-md safe-top px-3 sm:px-6">
       <button
         onClick={onOpenMenu}
         aria-label="Open menu"
-        className="rounded-lg p-2 text-muted transition hover:bg-panel-2 hover:text-fg lg:hidden"
+        className="rounded-md p-2.5 text-muted transition hover:bg-panel-2 hover:text-fg lg:hidden"
       >
         <IconMenu className="size-5" />
       </button>
@@ -114,7 +114,7 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
         ))}
       </SelectBox>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex min-w-0 items-center gap-2">
         {/* --- zaman aralığı ---------------------------------------------- */}
         <SelectBox
           value={range}
@@ -134,7 +134,7 @@ export function Topbar({ onOpenMenu }: { onOpenMenu: () => void }) {
           onClick={reload}
           aria-label="Refresh"
           title="Refresh"
-          className="rounded-lg border border-line bg-panel p-2.5 text-muted transition hover:text-fg"
+          className="grid size-10 place-items-center rounded-md border border-line bg-panel text-muted transition hover:text-fg"
         >
           <IconRefresh
             className={`size-[18px] ${refreshing ? "animate-spin" : ""}`}

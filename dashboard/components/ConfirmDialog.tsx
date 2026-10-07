@@ -109,7 +109,7 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 grid items-end sm:place-items-center bg-slate-950/50 p-0 sm:p-4 backdrop-blur-[2px]"
       // Zeminden çıkmak da güvenli taraf: yanlışlıkla açılan pencere bir
       // tıklamayla kapanmalı, kapatmak için düğme aramak gerekmemeli.
       onMouseDown={(event) => {
@@ -120,7 +120,7 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md rounded-card border border-line bg-panel p-6 shadow-xl"
+        className="safe-bottom rise w-full max-w-md rounded-t-xl sm:rounded-card border border-line bg-panel p-6 shadow-xl"
       >
         <div className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-danger/10 text-danger">

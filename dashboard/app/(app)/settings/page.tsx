@@ -46,7 +46,7 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1.5 border-b border-line px-5 py-4 last:border-b-0">
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1.5 border-b border-line px-4 sm:px-5 py-4 last:border-b-0">
       <div className="min-w-0">
         <p className="text-sm font-medium">{label}</p>
         {hint && <p className="mt-0.5 max-w-lg text-xs text-muted">{hint}</p>}
@@ -67,7 +67,7 @@ function Card({
 }) {
   return (
     <section className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
-      <div className="border-b border-line px-5 py-4">
+      <div className="border-b border-line px-4 sm:px-5 py-4">
         <h2 className="text-[15px] font-semibold">{title}</h2>
         <p className="mt-0.5 text-xs text-muted">{description}</p>
       </div>
@@ -321,7 +321,7 @@ export default function SettingsPage() {
               {account ? `${account.retention_days} days` : "—"}
             </span>
           </Row>
-          <div className="bg-bg-soft px-5 py-4">
+          <div className="bg-bg-soft px-4 sm:px-5 py-4">
             <p className="text-xs leading-relaxed text-muted">
               TraceBox is a black box, not an archive: it answers{" "}
               <span className="text-fg">what happened just before this
@@ -338,7 +338,7 @@ export default function SettingsPage() {
           title="Agent configuration"
           description="These live on each machine, and only there."
         >
-          <div className="px-5 py-4">
+          <div className="px-4 sm:px-5 py-4">
             <p className="text-xs leading-relaxed text-muted">
               Collection interval, send interval, flush thresholds and spool
               limits are read from{" "}
@@ -367,7 +367,7 @@ export default function SettingsPage() {
             label="Theme"
             hint="Applied before the first paint, so switching never flashes the other theme."
           >
-            <div className="flex overflow-hidden rounded-lg border border-line">
+            <div className="flex overflow-hidden rounded-md border border-line">
               {(
                 [
                   { value: "light", label: "Light", Icon: IconSun },
@@ -378,7 +378,7 @@ export default function SettingsPage() {
                   key={value}
                   onClick={() => setTheme(value)}
                   aria-pressed={theme === value}
-                  className={`flex items-center gap-2 px-3.5 py-2 text-sm transition ${
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-sm transition ${
                     theme === value
                       ? "bg-accent-soft font-medium text-accent"
                       : "text-muted hover:bg-panel-2 hover:text-fg"
@@ -400,7 +400,7 @@ export default function SettingsPage() {
           {/* Unlink yalnızca TraceBox'taki bağlantıyı siler; sağlayıcıdaki izin
               (grant) onda kalır. Bu HER OAuth sağlayıcısı için geçerli, o yüzden
               not satır başına değil kartın başında. */}
-          <p className="border-b border-line px-5 py-3 text-xs text-danger/80">
+          <p className="border-b border-line px-4 sm:px-5 py-3 text-xs text-danger/80">
             Unlinking only removes the connection on TraceBox. To fully revoke access, also
             remove TraceBox from the provider&apos;s own settings. Signing in again with the
             same verified email links it back automatically.
@@ -430,7 +430,7 @@ export default function SettingsPage() {
                       onClick={() => setUnlinkTarget(identity)}
                       disabled={!canUnlink || identBusy !== null}
                       title={canUnlink ? undefined : "This is your only sign-in method."}
-                      className="rounded-lg border border-line bg-panel px-3.5 py-2 text-sm text-muted transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-muted"
+                      className="rounded-md border border-line bg-panel px-3.5 py-2.5 text-sm text-muted transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-muted"
                     >
                       Unlink
                     </button>
@@ -438,7 +438,7 @@ export default function SettingsPage() {
                     <button
                       onClick={() => handleLink(id)}
                       disabled={!identities || identBusy !== null}
-                      className="rounded-lg border border-line bg-panel-2 px-3.5 py-2 text-sm font-medium transition hover:border-accent disabled:opacity-50"
+                      className="rounded-md border border-line bg-panel-2 px-3.5 py-2.5 text-sm font-medium transition hover:border-accent disabled:opacity-50"
                     >
                       {identBusy === id ? "Redirecting…" : "Link"}
                     </button>
@@ -447,7 +447,7 @@ export default function SettingsPage() {
               </Row>
             );
           })}
-          {identError && <p className="px-5 pb-4 text-xs text-danger">{identError}</p>}
+          {identError && <p className="px-4 sm:px-5 pb-4 text-xs text-danger">{identError}</p>}
         </Card>
 
         {/* --- yıkıcı işlem: hesap silme (§9.10) -------------------------- */}
@@ -466,7 +466,7 @@ export default function SettingsPage() {
                   setPwNotice(null);
                   setPwStep("form");
                 }}
-                className="rounded-lg border border-danger/40 px-3.5 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+                className="rounded-md border border-danger/40 px-3.5 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/10"
               >
                 Change password
               </button>
@@ -489,7 +489,7 @@ export default function SettingsPage() {
                 setDeleteError(null);
                 setDeleteStep("type");
               }}
-              className="flex items-center gap-2 rounded-lg border border-danger/40 px-3.5 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+              className="flex items-center gap-2 rounded-md border border-danger/40 px-3.5 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/10"
             >
               <IconTrash className="size-4" />
               Delete account
@@ -551,13 +551,13 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setPwStep(null)}
-                className="rounded-lg border border-line px-4 py-2 text-sm text-muted transition hover:bg-panel-2 hover:text-fg"
+                className="rounded-md border border-line px-4 py-2.5 text-sm text-muted transition hover:bg-panel-2 hover:text-fg"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-strong"
+                className="rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-strong"
               >
                 Continue
               </button>

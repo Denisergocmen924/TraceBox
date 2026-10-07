@@ -38,6 +38,13 @@ const CHIP: Record<Tone, string> = {
   neutral: "bg-accent-soft text-accent",
 };
 
+const DOT: Record<Tone, string> = {
+  ok: "bg-ok",
+  warn: "bg-warn",
+  danger: "bg-danger",
+  neutral: "bg-faint",
+};
+
 const VALUE_TONE: Record<Tone, string> = {
   ok: "text-fg",
   warn: "text-warn",
@@ -61,21 +68,16 @@ function Stat({
   tone: Tone;
 }) {
   return (
-    <section className="rounded-card border border-line bg-panel p-4 shadow-card">
-      <div className="flex items-center gap-3">
-        <span
-          className={`grid size-9 shrink-0 place-items-center rounded-xl ${CHIP[tone]}`}
-        >
-          <Icon className="size-[18px]" />
-        </span>
-        <h2 className="text-[15px] font-medium">{title}</h2>
-      </div>
-
+    <section className="rise bg-panel p-4 sm:p-5">
+      <h2 className="flex items-center gap-2 text-xs font-medium text-muted">
+        <span className={`size-1.5 rounded-full ${DOT[tone]}`} />
+        {title}
+      </h2>
       <p
-        className={`mt-4 flex items-baseline gap-1.5 text-[26px] leading-none font-semibold tracking-tight tabular-nums ${VALUE_TONE[tone]}`}
+        className={`mt-3 flex items-baseline gap-1.5 font-mono text-[28px] leading-none font-medium tracking-tight tabular-nums ${VALUE_TONE[tone]}`}
       >
         {value}
-        {unit && <span className="text-xs font-medium text-muted">{unit}</span>}
+        {unit && <span className="font-sans text-xs font-normal text-muted">{unit}</span>}
       </p>
       <p className="mt-2 text-xs text-faint">{note}</p>
     </section>
@@ -126,7 +128,7 @@ export function HealthStrip({
   const retentionDays = retention?.retentionDays ?? null;
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card xl:grid-cols-4">
       <Stat
         icon={IconServer}
         title="Reporting"

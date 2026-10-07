@@ -184,7 +184,7 @@ export default function InventoryPage() {
               className="rounded-card border border-line bg-panel shadow-card"
             >
               {/* --- künye başlığı ------------------------------------- */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-5 py-4">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 sm:px-5 py-4">
                 <Link
                   href={`/devices/${device.id}`}
                   className="text-[15px] font-semibold transition hover:text-accent"
@@ -221,7 +221,7 @@ export default function InventoryPage() {
                 altta. Alanların yeri sabit olmasaydı kart, tablonun çözdüğü
                 tek şeyi — aynı bilgiyi aynı yerde bulma — kaybederdi.
               */}
-              <div className="grid gap-x-6 gap-y-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-x-6 gap-y-4 px-4 sm:px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Field
                   label="CPU"
                   className="lg:col-span-2"

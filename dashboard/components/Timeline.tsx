@@ -310,10 +310,12 @@ export function Timeline({
       if (e.key === "Escape") cancel();
     };
 
-    window.addEventListener("mouseup", finish);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", cancel);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("mouseup", finish);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
       window.removeEventListener("keydown", onKey);
     };
   }, [dragging, spanMs, zoomTo]);
@@ -376,14 +378,14 @@ export function Timeline({
   };
 
   const control =
-    "inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-2 py-1 font-medium text-muted transition hover:border-accent/50 hover:text-fg";
+    "inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-3 py-2 font-medium sm:px-2 sm:py-1 text-muted transition hover:border-accent/50 hover:text-fg";
 
   const title = heading ?? "Timeline";
 
   return (
     <section className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
       <header className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-panel-2 text-fg">
           <IconActivity className="size-[18px]" />
         </span>
         <div className="min-w-0">
