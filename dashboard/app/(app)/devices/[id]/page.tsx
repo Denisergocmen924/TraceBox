@@ -101,6 +101,7 @@ export default function DeviceDetailPage({
             <Timeline
               deviceId={device.id}
               ramTotalMb={device.ram_total_mb}
+              enabledAddons={device.enabled_addons}
             />
             <LogList deviceId={device.id} />
           </div>

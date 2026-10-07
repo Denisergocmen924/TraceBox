@@ -52,6 +52,16 @@ import {
  */
 type Dialog = "none" | "delete" | "force";
 
+/** Agent'ın bildiği altı eklenti (agent/core/config.py KNOWN_ADDONS) ve ekranda görünen adı. */
+const ADDON_LABELS: readonly [string, string][] = [
+  ["temperature", "Temperature"],
+  ["swap", "Swap"],
+  ["load_avg", "Load average"],
+  ["gpu", "GPU"],
+  ["external_ip", "External IP"],
+  ["crash_processes", "Crash processes"],
+];
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 text-xs">
@@ -206,9 +216,38 @@ export function DetailPanel({
             label="Shipping"
             value={device.logging_enabled ? "on" : "paused"}
           />
-          {device.enabled_addons.length > 0 && (
-            <Row label="Add-ons" value={device.enabled_addons.join(", ")} />
-          )}
+        </Group>
+
+        {/*
+          Eklentiler YALNIZCA OKUNUR. Değiştirme yolu bilerek yok: eklenti
+          listesi config'te durur ve config insan sınırıdır (agent'a salt-okunur,
+          §4.3). Dashboard'dan açılabilseydi hesap, makinedeki kişinin rızası
+          olmadan — özellikle external_ip'yi — açabilirdi. Karar: C kapsam dışı
+          (bkz. md/memory/decisions.md). Bu yüzden panel neyin AÇIK olduğunu
+          söylüyor ve nasıl değişeceğini açıkça yazıyor.
+        */}
+        <Group title="ADD-ONS">
+          {ADDON_LABELS.map(([name, label]) => {
+            const on = device.enabled_addons.includes(name);
+            return (
+              <div
+                key={name}
+                className="flex items-baseline justify-between gap-3 text-xs"
+              >
+                <span className={on ? "" : "text-muted"}>{label}</span>
+                <span className={on ? "text-fg" : "text-faint"}>
+                  {on ? "on" : "off"}
+                </span>
+              </div>
+            );
+          })}
+          <p className="pt-1 text-[11px] leading-relaxed text-faint">
+            Add-ons can only be changed on the device itself, in{" "}
+            <code className="font-mono">/etc/tracebox/config.toml</code>{" "}
+            (<code className="font-mono">enabled_addons</code>), then restart the
+            agent. This is deliberate: the dashboard cannot switch on data
+            collection that the machine&apos;s owner did not choose.
+          </p>
         </Group>
       </section>
 
