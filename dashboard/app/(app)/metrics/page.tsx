@@ -104,6 +104,7 @@ export default function MetricsPage() {
             key={device.id}
             deviceId={device.id}
             ramTotalMb={device.ram_total_mb}
+            enabledAddons={device.enabled_addons}
             heading={device.device_name}
             href={`/devices/${device.id}`}
             /* Çöküş şeridi burada kapalı: ekranda birden çok makine var ve her

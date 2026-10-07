@@ -91,6 +91,15 @@
    */
   --color-net-out: #d6248b;
   --color-net-out-soft: #fdeaf4;
+  /* Eklenti ölçüleri. Ton bölgeleri mevcut beş rengin (250/160/25/217/330°)
+     komşusu olmayacak şekilde seçildi: sıcaklık kırmızı, swap camgöbeği,
+     yük ortalaması sarı ailesi (üç çizgi), GPU deniz yeşili. */
+  --color-temp: #e5484d;
+  --color-swap: #0891b2;
+  --color-load: #ca8a04;
+  --color-load-5: #84a315;
+  --color-load-15: #92602a;
+  --color-gpu: #0d9488;
 
   --radius-card: 0.5rem; /* tüm kartlarda AYNI yarıçap — referansta 12px */
 
@@ -143,6 +152,12 @@
   --color-net-soft: #10203c;
   --color-net-out: #f472b6;
   --color-net-out-soft: #3a1024;
+  --color-temp: #f87171;
+  --color-swap: #22d3ee;
+  --color-load: #facc15;
+  --color-load-5: #a3e635;
+  --color-load-15: #d6a36b;
+  --color-gpu: #2dd4bf;
 
   --shadow-card: none;
   --shadow-pop: 0 10px 30px rgb(0 0 0 / 0.5);

@@ -311,6 +311,9 @@ create index commands_device_status_idx on commands (device_id, status);
 -- tarafında ORAN olarak hesaplanır (§4.2) — saniyedeki MB, kümülatif sayaç
 -- değil. Kümülatif olsalardı bir kovanın ortalaması hiçbir şey ifade etmezdi.
 -- Mbit'e çevirme arayüzde yapılır (x8); veritabanı kolonun kendi birimini korur.
+--
+-- Eklenti sütunları (sıcaklık, swap, load_avg, GPU) da aynı üçlüyü döndürür. Eklenti
+-- kapalıyken sütun null'dır ve min/max/avg null döner — "ölçülmedi", sıfır değil.
 create or replace function public.metrics_buckets(
   p_device_id uuid,
   p_from      timestamptz,
@@ -334,7 +337,28 @@ returns table (
   net_sent_avg real,
   net_recv_min real,
   net_recv_max real,
-  net_recv_avg real
+  net_recv_avg real,
+  temp_min            real,
+  temp_max            real,
+  temp_avg            real,
+  swap_min            int,
+  swap_max            int,
+  swap_avg            real,
+  load1_min           real,
+  load1_max           real,
+  load1_avg           real,
+  load5_min           real,
+  load5_max           real,
+  load5_avg           real,
+  load15_min          real,
+  load15_max          real,
+  load15_avg          real,
+  gpu_usage_min       real,
+  gpu_usage_max       real,
+  gpu_usage_avg       real,
+  gpu_vram_min        int,
+  gpu_vram_max        int,
+  gpu_vram_avg        real
 )
 language sql
 stable
@@ -377,7 +401,28 @@ as $$
     avg(m.net_sent_mb)::real      as net_sent_avg,
     min(m.net_recv_mb)            as net_recv_min,
     max(m.net_recv_mb)            as net_recv_max,
-    avg(m.net_recv_mb)::real      as net_recv_avg
+    avg(m.net_recv_mb)::real      as net_recv_avg,
+    min(m.temperature_c)            as temp_min,
+    max(m.temperature_c)            as temp_max,
+    avg(m.temperature_c)::real      as temp_avg,
+    min(m.swap_used_mb)             as swap_min,
+    max(m.swap_used_mb)             as swap_max,
+    avg(m.swap_used_mb)::real       as swap_avg,
+    min(m.load_avg_1)               as load1_min,
+    max(m.load_avg_1)               as load1_max,
+    avg(m.load_avg_1)::real         as load1_avg,
+    min(m.load_avg_5)               as load5_min,
+    max(m.load_avg_5)               as load5_max,
+    avg(m.load_avg_5)::real         as load5_avg,
+    min(m.load_avg_15)              as load15_min,
+    max(m.load_avg_15)              as load15_max,
+    avg(m.load_avg_15)::real        as load15_avg,
+    min(m.gpu_usage_percent)        as gpu_usage_min,
+    max(m.gpu_usage_percent)        as gpu_usage_max,
+    avg(m.gpu_usage_percent)::real  as gpu_usage_avg,
+    min(m.gpu_vram_used_mb)         as gpu_vram_min,
+    max(m.gpu_vram_used_mb)         as gpu_vram_max,
+    avg(m.gpu_vram_used_mb)::real   as gpu_vram_avg
   from public.metrics m
   cross join w
   where m.device_id   = p_device_id
