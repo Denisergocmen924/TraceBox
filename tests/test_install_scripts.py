@@ -453,3 +453,84 @@ def test_uninstall_does_not_stop_the_unit_that_is_running_it(uninstall_sh):
     assert re.search(r'systemctl disable --now "\$\{UNINSTALL_PATH_UNIT\}"', body), (
         "izleyici kapatılmıyor"
     )
+
+
+# --- Eklenti seçimi --------------------------------------------------------
+
+ADDON_NAMES = ["temperature", "swap", "load_avg", "gpu", "crash_processes", "external_ip"]
+
+
+def run_external_ip(install_sh: str, answers: list[str]) -> int:
+    """`ask_external_ip`'i gerçek betikten çıkarıp, soruları verilen cevaplarla çalıştırır.
+
+    ask_yes_no yerine cevap kuyruğu koyulur; böylece fonksiyonun KENDİ
+    mantığı (kaç kez soruyor, ne zaman reddediyor) test edilir, metni değil.
+    """
+    body = re.search(r"^ask_external_ip\(\) \{.*?^\}", install_sh, re.MULTILINE | re.DOTALL)
+    assert body, "ask_external_ip bulunamadı"
+    script = (
+        'TTY_DEVICE=/dev/null; USE_COLOR=0\n'
+        f'ANSWERS=({" ".join(answers)}); ASKED=0\n'
+        'ask_yes_no() { local a="${ANSWERS[ASKED]:-n}"; ASKED=$((ASKED+1)); [[ "$a" == y ]]; }\n'
+        'red() { printf "%s" "$*"; }\n'
+        f"{body.group(0)}\n"
+        'ask_external_ip; rc=$?; echo "asked=${ASKED}"; exit $rc\n'
+    )
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    return result.returncode
+
+
+def test_every_addon_is_asked_one_by_one(install_sh):
+    """Her eklenti kendi sorusunu alır; toplu "hepsi" cevabı yok."""
+    asked = code(install_sh)
+    for name in ADDON_NAMES:
+        assert f'"{name}"' in asked, f"{name} için soru yok"
+
+
+def test_addon_prompts_default_to_no(install_sh):
+    """Eklenti verilen bir izindir: Enter'a basmak onu AÇMAMALI."""
+    assert "[y/N]" in install_sh
+    assert "[Y/n]" not in install_sh
+
+
+def test_selected_addons_reach_the_config_file(install_sh):
+    """Cevaplar config'e yazılmalı; sabit `[]` kalırsa sorular boşa sorulur."""
+    assert "enabled_addons = ${ADDONS_TOML}" in code(install_sh)
+    assert "enabled_addons = []" not in code(install_sh)
+
+
+def test_addons_are_only_asked_when_the_config_is_written(install_sh):
+    """Mevcut config korunuyorsa kullanıcının eski seçimi ezilmemeli."""
+    write = install_sh.index("if (( WRITE_CONFIG ))")
+    assert install_sh.index("ask_external_ip &&") > write
+
+
+def test_external_ip_is_highlighted_in_red(install_sh):
+    assert r"\033[1;31m" in install_sh
+    assert "red '" in install_sh or 'red "' in install_sh
+
+
+def test_color_decision_is_not_made_inside_the_helper(install_sh):
+    """red() $(...) içinde çağrılır; orada stdout boru olduğundan `-t 1`
+    her zaman yanlış çıkar ve vurgu hiç görünmezdi. Karar en üstte verilir."""
+    helper = re.search(r"^red\(\) \{.*?^\}", install_sh, re.MULTILINE | re.DOTALL).group(0)
+    assert "-t 1" not in helper
+    assert re.search(r"^\[\[.*-t 1.*\]\] && USE_COLOR=1", install_sh, re.MULTILINE)
+
+
+@pytest.mark.parametrize(
+    ("answers", "enabled"),
+    [
+        (["y", "y"], True),
+        (["y", "n"], False),   # ikinci onay verilmezse açılmaz
+        (["n", "y"], False),   # birinci reddedilince ikinciye bakılmaz
+        (["n", "n"], False),
+    ],
+)
+def test_external_ip_needs_two_consents(install_sh, answers, enabled):
+    assert (run_external_ip(install_sh, answers) == 0) is enabled
+
+
+def test_external_ip_stops_asking_after_the_first_no(install_sh):
+    body = re.search(r"^ask_external_ip\(\) \{.*?^\}", install_sh, re.MULTILINE | re.DOTALL).group(0)
+    assert "|| return 1" in body

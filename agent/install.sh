@@ -115,6 +115,40 @@ ask_yes_no() {
   [[ "${answer}" == "y" || "${answer}" == "Y" ]]
 }
 
+# Kırmızı vurgu: yalnızca stdout gerçekten bir terminalse ve NO_COLOR tanımlı
+# değilse. Karar BİR KEZ, en üst düzeyde verilir: red() $(...) içinde
+# çağrıldığında stdout bir boru olur, orada `-t 1` her zaman yanlış çıkardı.
+USE_COLOR=0
+[[ -z "${NO_COLOR:-}" && -t 1 ]] && USE_COLOR=1
+
+red() {
+  if (( USE_COLOR )); then
+    printf '\033[1;31m%s\033[0m' "$*"
+  else
+    printf '%s' "$*"
+  fi
+}
+
+# Tek bir eklenti için "açılsın mı?" sorusu. Varsayılan HAYIR: eklenti
+# verilen bir izindir, sessizce açılmaz.
+ask_addon() {
+  local name="$1" description="$2"
+  printf '    %-16s %s\n' "${name}" "${description}" > "${TTY_DEVICE}"
+  ask_yes_no "  enable ${name}?"
+}
+
+# external_ip: cihazın dış IP adresi sunucuda SAKLANIR (kişisel veri sayılabilir).
+# Bu yüzden iki ayrı onay: ikisi de "y" olmadan eklenti açılmaz.
+ask_external_ip() {
+  {
+    printf '\n    %s\n' "$(red '!! external_ip — stores this machine'"'"'s PUBLIC IP address on the server')"
+    printf '    %s\n' "$(red 'The address is written to your account and shown in the dashboard.')"
+    printf '    %s\n' "$(red 'Turning it off later removes the stored value, but only at the next agent start.')"
+  } > "${TTY_DEVICE}"
+  ask_yes_no "  I want the public IP stored (1/2)" || return 1
+  ask_yes_no "  Are you sure? Confirm once more (2/2)"
+}
+
 run_as_service_user() {
   if have runuser; then
     runuser -u "${SERVICE_USER}" -- "$@"
@@ -311,6 +345,24 @@ if (( WRITE_CONFIG )); then
   [[ "${DEVICE_KEY}" == "${KEY_PREFIX}"* ]] \
     || warn "the key does not start with '${KEY_PREFIX}' — make sure you pasted the right value"
 
+  # --- Eklentiler (CLAUDE.md §4.3). Hepsi tek tek sorulur, varsayılan hayır. ---
+  ADDONS=()
+  say "optional add-ons (core metrics and logs are always collected):"
+  ask_addon "temperature"     "CPU temperature (needs hardware sensors)" && ADDONS+=("temperature")
+  ask_addon "swap"            "swap space in use"                        && ADDONS+=("swap")
+  ask_addon "load_avg"        "1 / 5 / 15 minute load average"           && ADDONS+=("load_avg")
+  ask_addon "gpu"             "GPU usage and video memory"               && ADDONS+=("gpu")
+  ask_addon "crash_processes" "the 5 heaviest processes at flush time"   && ADDONS+=("crash_processes")
+  ask_external_ip && ADDONS+=("external_ip")
+
+  # TOML dizisi: ["swap", "load_avg"] — boşsa [].
+  ADDONS_TOML="["
+  for addon in ${ADDONS[@]+"${ADDONS[@]}"}; do
+    [[ "${ADDONS_TOML}" == "[" ]] || ADDONS_TOML+=", "
+    ADDONS_TOML+="\"${addon}\""
+  done
+  ADDONS_TOML+="]"
+
   # Dosya İÇERİK yazılmadan önce kilitlenir: anahtar bir an bile başkalarının
   # okuyabileceği bir dosyada durmasın.
   : > "${CONFIG_FILE}"
@@ -338,7 +390,7 @@ flush_cooldown_seconds = 10
 spool_max_age_days = 10
 spool_max_size_mb  = 200
 
-enabled_addons = []
+enabled_addons = ${ADDONS_TOML}
 TOML
 
   say "written: ${CONFIG_FILE} (owner ${SERVICE_USER}, mode 600)"
