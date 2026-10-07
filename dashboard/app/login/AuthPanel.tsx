@@ -38,7 +38,7 @@ import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 type Mode = "signin" | "signup";
 
 const field =
-  "mt-2 w-full rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm outline-none transition focus:border-accent";
+  "mt-2 w-full rounded-md border border-line bg-panel-2 px-3 py-3 text-sm outline-none transition focus:border-accent";
 
 export function AuthPanel({ recovery }: { recovery: boolean }) {
   const [mode, setMode] = useState<Mode>("signin");
@@ -220,7 +220,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         <button
           type="submit"
           disabled={busy}
-          className="mt-6 w-full rounded-lg bg-accent px-3 py-2.5 font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
+          className="mt-6 w-full rounded-md bg-accent px-3 py-3 font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save password"}
         </button>
@@ -263,7 +263,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
               type="button"
               onClick={() => signInWithProvider(id)}
               disabled={busy}
-              className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-sm font-medium transition hover:border-accent disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2.5 rounded-md border border-line bg-panel-2 px-3 py-3 text-sm font-medium transition hover:border-accent disabled:opacity-50"
             >
               <Icon className="size-[18px]" />
               Continue with {label}
@@ -342,7 +342,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         <button
           type="submit"
           disabled={busy}
-          className="mt-6 w-full rounded-lg bg-accent px-3 py-2.5 font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
+          className="mt-6 w-full rounded-md bg-accent px-3 py-3 font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
         >
           {busy
             ? mode === "signup"

@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AppProvider } from "@/lib/appState";
 import { useSession } from "@/lib/useSession";
+import { TabBar } from "@/components/TabBar";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 
@@ -61,8 +62,11 @@ export default function AppLayout({
         <Topbar onOpenMenu={() => setMenuOpen(true)} />
         {/* Yatay boşluk 30px — referansta kenar çubuğunun çizgisi ile ilk
             kartın kenarı arasındaki ölçü. */}
-        <main className="px-4 py-6 sm:px-[30px]">{children}</main>
+        <main className="px-4 pt-5 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+1.5rem)] sm:px-[30px] lg:pb-8">
+          {children}
+        </main>
       </div>
+      <TabBar onMore={() => setMenuOpen(true)} />
     </AppProvider>
   );
 }

@@ -47,10 +47,10 @@ export function SelectBox({
   const id = useId();
 
   return (
-    <div className="relative">
-      <div className="pointer-events-none flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2 text-sm font-medium">
+    <div className="relative min-w-0">
+      <div className="pointer-events-none flex items-center gap-2 min-h-10 rounded-md border border-line bg-panel px-3 py-2 text-sm font-medium">
         {icon}
-        <span className="whitespace-nowrap">{label}</span>
+        <span className="max-w-[26vw] truncate whitespace-nowrap sm:max-w-none">{label}</span>
         <IconChevronDown className="size-4 shrink-0 text-muted" />
       </div>
       <select

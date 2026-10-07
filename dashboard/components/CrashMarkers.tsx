@@ -101,7 +101,7 @@ export function CrashMarkers({
       </div>
 
       {/* --- işaret şeridi ------------------------------------------------ */}
-      <div className="relative mx-5 mt-1.5 mb-3 h-5">
+      <div className="relative mx-5 mt-1.5 mb-3 h-8">
         {/* İşaretlerin üzerinde durduğu eksen; boşken de şeridi görünür kılar. */}
         <div className="absolute inset-x-0 bottom-0 h-px bg-line" />
 
@@ -128,7 +128,7 @@ export function CrashMarkers({
               /* Tıklama hedefi işaretin kendisinden geniş: üçgen 10px, hedef
                  20px. Bir sıçramanın tam üstündeki 10 pikseli fareyle
                  tutturmak zorlaşırdı. */
-              className={`absolute bottom-0 flex w-5 -translate-x-1/2 justify-center pt-1 ${marker.text}`}
+              className={`absolute bottom-0 flex h-8 w-8 -translate-x-1/2 items-end justify-center pb-0.5 ${marker.text}`}
               style={{ left: `${fraction * 100}%` }}
             >
               {/*
@@ -161,7 +161,7 @@ export function CrashMarkers({
             <button
               onClick={() => setSelectedId(null)}
               aria-label="Close snapshot"
-              className="ml-auto rounded-md p-1 text-muted transition hover:bg-panel-2 hover:text-fg"
+              className="ml-auto rounded-md p-2 text-muted transition hover:bg-panel-2 hover:text-fg"
             >
               <IconClose className="size-4" />
             </button>

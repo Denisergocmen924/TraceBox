@@ -78,7 +78,7 @@ function Arrow({ state }: { state: HopState }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M4 12h14" strokeDasharray="3 3" />
+        <path d="M4 12h14" strokeDasharray="3 3" className={state === "ok" ? "flow-dash" : undefined} />
         <path d="M14 7l5 5-5 5" />
       </svg>
     </div>
@@ -89,10 +89,8 @@ function Stop({ hop }: { hop: Hop }) {
   const Icon = ICON[hop.key];
 
   return (
-    <div className="flex min-w-0 flex-1 items-start gap-3 rounded-card border border-line bg-panel-2 p-4">
-      <span
-        className={`grid size-9 shrink-0 place-items-center rounded-xl ${CHIP[hop.state]}`}
-      >
+    <div className="flex min-w-0 flex-1 items-start gap-3 rounded-md border border-line bg-bg p-3 sm:p-4">
+      <span className={`grid size-8 shrink-0 place-items-center ${CHIP[hop.state].split(" ")[1]}`}>
         <Icon className="size-[18px]" />
       </span>
 

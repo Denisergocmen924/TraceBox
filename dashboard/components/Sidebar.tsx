@@ -110,7 +110,7 @@ export function Sidebar({
       */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-30 bg-fg/40 backdrop-blur-sm transition-opacity lg:hidden ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />

@@ -62,7 +62,7 @@ function Metric({
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-2">
         {clamped != null && (
           <div
-            className={`h-full rounded-full transition-[width] duration-500 ${bar}`}
+            className={`h-full rounded-full transition-[width] duration-700 ease-out ${bar}`}
             style={{ width: `${clamped}%` }}
           />
         )}
@@ -87,10 +87,10 @@ export function DeviceCard({ device, now }: { device: Device; now: number }) {
   return (
     <Link
       href={`/devices/${device.id}`}
-      className="group flex flex-col rounded-card border border-line bg-panel shadow-card transition hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-pop"
+      className="rise group flex flex-col rounded-card border border-line bg-panel shadow-card transition hover:border-accent/60 active:scale-[0.99]"
     >
       <div className="flex items-start gap-3 p-5">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+        <span className="grid size-10 shrink-0 place-items-center rounded-md bg-panel-2 text-fg">
           <IconServer className="size-5" />
         </span>
         <div className="min-w-0 flex-1">

@@ -35,8 +35,8 @@ export function Panel({
     <section
       className={`rounded-card border border-line bg-panel shadow-card ${className}`}
     >
-      <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4">
-        <h2 className="flex min-h-[38px] items-center text-[15px] font-semibold">
+      <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5">
+        <h2 className="flex min-h-[38px] items-center text-sm font-medium">
           {title}
         </h2>
         {action}
@@ -66,5 +66,5 @@ export function PanelLink({
 
 /** Panelin gövdesinde "veri yok" / "yükleniyor" satırı. */
 export function PanelNote({ children }: { children: React.ReactNode }) {
-  return <p className="px-5 pb-5 text-sm text-faint">{children}</p>;
+  return <p className="px-4 pb-5 sm:px-5 text-sm text-faint">{children}</p>;
 }
