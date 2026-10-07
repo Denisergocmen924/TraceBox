@@ -52,6 +52,12 @@ export type DeviceRow = {
   last_boot: string | null;
   logging_enabled: boolean;
   last_seen: string | null;
+  /**
+   * Açık eklentiler. Listede de gerekiyor: Metrics sayfası her cihaz için
+   * zaman çizelgesi çiziyor ve hangi eklenti grafiklerinin çıkacağı buna bağlı.
+   * jsonb dizisi birkaç bayt; 10 saniyelik tur için yük sayılmaz.
+   */
+  enabled_addons: string[];
   metrics: LatestMetric[]; // gömülü sorgu her zaman dizi döner: 0 ya da 1 satır
 };
 
@@ -133,12 +139,12 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
  * Detay ekranı (§9.4) bunun üstüne envanterin kalanını ekler.
  */
 const LIST_COLUMNS = `id, device_name, os_name, os_version, arch, cpu_cores_logical,
-   ram_total_mb, disk_total_mb, agent_version, last_boot, logging_enabled, last_seen,
+   ram_total_mb, disk_total_mb, agent_version, last_boot, logging_enabled, last_seen, enabled_addons,
    metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent,
              net_sent_mb, net_recv_mb )`;
 
 const DETAIL_COLUMNS = `${LIST_COLUMNS}, cpu_model, cpu_cores_physical,
-   kernel_version, gpu_model, external_ip, enabled_addons`;
+   kernel_version, gpu_model, external_ip`;
 
 export async function fetchDevices(): Promise<Device[]> {
   const client = supabase();
@@ -195,7 +201,6 @@ export type DeviceDetail = Device & {
   kernel_version: string | null;
   gpu_model: string | null;
   external_ip: string | null;
-  enabled_addons: string[];
 };
 
 /** Postgres: geçersiz UUID metni. Uydurulmuş bir URL hataya değil, 404'e düşmeli. */
@@ -293,7 +298,6 @@ export type InventoryDevice = Device & {
   kernel_version: string | null;
   gpu_model: string | null;
   external_ip: string | null;
-  enabled_addons: string[];
 };
 
 /**

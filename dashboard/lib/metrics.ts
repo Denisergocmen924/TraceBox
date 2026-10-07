@@ -43,7 +43,24 @@ export type MetricBucket = {
   net_recv_min?: number | null;
   net_recv_max?: number | null;
   net_recv_avg?: number | null;
+} & AddonBucketFields;
+
+/**
+ * Eklenti sütunları (migration 0006). Hepsi opsiyonel, ağ sütunlarıyla aynı
+ * sebeple: 0006 çalıştırılmadıysa fonksiyon bunları döndürmez ve eklenti
+ * grafikleri sessizce boş kalır, ekranın geri kalanı çalışır. Ön ek, lib/addons.ts
+ * içindeki izlerin `prefix` alanıyla birebir aynı.
+ */
+type Triplet<P extends string> = {
+  [K in `${P}_min` | `${P}_max` | `${P}_avg`]?: number | null;
 };
+export type AddonBucketFields = Triplet<"temp"> &
+  Triplet<"swap"> &
+  Triplet<"load1"> &
+  Triplet<"load5"> &
+  Triplet<"load15"> &
+  Triplet<"gpu_usage"> &
+  Triplet<"gpu_vram">;
 
 /**
  * Kaç kova isteneceği. ~1000 ekranın çözünürlüğüne oranlı sayı (§9.6 madde 4);
@@ -66,7 +83,7 @@ export const FLUSH_THRESHOLD = { cpu: 90, ram: 90, disk: 95 } as const;
  * `const` ve içindeki oklar bu iki yardımcıyı çağırıyor. Aşağıda tanımlansalar
  * modül yüklenirken henüz kurulmamış olurlardı.
  */
-function num(value: number, digits = 1): string {
+export function num(value: number, digits = 1): string {
   return value.toLocaleString("en-GB", { maximumFractionDigits: digits });
 }
 
@@ -342,7 +359,11 @@ export type Track = {
   format: (value: number) => string;
 };
 
-function buildSegments(points: Point[], scale: number, widthMs: number) {
+export function buildSegments(
+  points: Point[],
+  scale: number,
+  widthMs: number,
+) {
   const scaled =
     scale === 1
       ? points
@@ -484,7 +505,7 @@ export function tracksCeiling(tracks: Track[]): number {
 }
 
 /** toPoints'in SeriesDef'e bağlı olmayan hâli — ağ izleri için. */
-function pointsFrom(
+export function pointsFrom(
   buckets: MetricBucket[],
   pick: (b: MetricBucket) => Band,
 ): Point[] {
