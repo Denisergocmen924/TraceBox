@@ -55,3 +55,38 @@ jobs:
       - name: Testleri çalıştır
         # Yapılandırma pytest.ini'den okunur (testpaths, pythonpath).
         run: pytest
+
+  dashboard:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: dashboard
+
+    steps:
+      - name: Kodu çek
+        uses: actions/checkout@v4
+
+      - name: Node kur
+        uses: actions/setup-node@v4
+        with:
+          # dashboard/Dockerfile ile AYNI sürüm; CI'ın söz verdiği şey üretimde
+          # çalışacağıdır.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: Tip denetimi
+        run: npm run typecheck
+
+      - name: Lint
+        # Hata varsa kırmızı; uyarılar (React compiler kuralları) kırmızı yapmaz.
+        run: npm run lint
+
+      - name: Testleri çalıştır
+        # Yapılandırma vitest.config.mjs'ten okunur. Testler saf fonksiyonlara
+        # bakar; Supabase'e bağlanmaz, secret gerekmez.
+        run: npm test

@@ -117,7 +117,6 @@ export default function SettingsPage() {
       setIdentError(description.replace(/\+/g, " "));
       window.history.replaceState(null, "", window.location.pathname);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadIdentities();
   }, [loadIdentities]);
 

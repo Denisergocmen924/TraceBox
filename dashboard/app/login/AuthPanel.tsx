@@ -32,7 +32,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
-import { OAUTH_PROVIDERS, providerLabel, type OAuthProviderId } from "@/lib/oauthProviders";
+import { OAUTH_PROVIDERS, type OAuthProviderId } from "@/lib/oauthProviders";
 import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 
 type Mode = "signin" | "signup";
