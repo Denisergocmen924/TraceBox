@@ -82,6 +82,10 @@ jobs:
       - name: Tip denetimi
         run: npm run typecheck
 
+      - name: Lint
+        # Hata varsa kırmızı; uyarılar (React compiler kuralları) kırmızı yapmaz.
+        run: npm run lint
+
       - name: Testleri çalıştır
         # Yapılandırma vitest.config.mjs'ten okunur. Testler saf fonksiyonlara
         # bakar; Supabase'e bağlanmaz, secret gerekmez.

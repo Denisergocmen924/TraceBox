@@ -13,7 +13,6 @@
  * Her kart HANGİ TEMELE dayandığını kendi altında yazıyor (§9.6 madde 5) —
  * "1.4 s" tek başına üç örnekten de beş yüz örnekten de çıkmış olabilir.
  */
-import { IconActivity, IconAlert, IconClock, IconServer } from "@/components/icons";
 import {
   coverageDays,
   formatLag,
@@ -25,18 +24,6 @@ import {
 } from "@/lib/health";
 
 type Tone = "ok" | "warn" | "danger" | "neutral";
-
-/*
- * Sınıf adları TAM yazılı, şablon yok: Tailwind kaynağı METİN olarak tarıyor,
- * `bg-${tone}-soft` gibi bir ifadeden üretilecek sınıfı göremez ve o rengi
- * derlemeye hiç koymaz.
- */
-const CHIP: Record<Tone, string> = {
-  ok: "bg-ok-soft text-ok",
-  warn: "bg-warn-soft text-warn",
-  danger: "bg-danger-soft text-danger",
-  neutral: "bg-accent-soft text-accent",
-};
 
 const DOT: Record<Tone, string> = {
   ok: "bg-ok",
@@ -53,14 +40,12 @@ const VALUE_TONE: Record<Tone, string> = {
 };
 
 function Stat({
-  icon: Icon,
   title,
   value,
   unit,
   note,
   tone,
 }: {
-  icon: (p: { className?: string }) => React.ReactElement;
   title: string;
   value: string;
   unit?: string;
@@ -130,7 +115,6 @@ export function HealthStrip({
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card xl:grid-cols-4">
       <Stat
-        icon={IconServer}
         title="Reporting"
         value={hosts === 0 ? "—" : `${reporting} / ${hosts}`}
         note={hosts === 0 ? "No hosts registered" : "Hosts seen in the last minute"}
@@ -138,7 +122,6 @@ export function HealthStrip({
       />
 
       <Stat
-        icon={IconClock}
         title="Ingest lag"
         value={lag && lag.samples > 0 ? formatLag(lag.medianMs) : "—"}
         note={
@@ -150,7 +133,6 @@ export function HealthStrip({
       />
 
       <Stat
-        icon={IconAlert}
         title="Emergency ships"
         value={flushes ? String(flushes.total) : "—"}
         note={flushes ? "Threshold crossings in range" : "No measurements yet"}
@@ -158,7 +140,6 @@ export function HealthStrip({
       />
 
       <Stat
-        icon={IconActivity}
         title="Recorded"
         value={covered == null ? "—" : covered.toFixed(1)}
         unit={covered == null ? undefined : `of ${retentionDays} days`}

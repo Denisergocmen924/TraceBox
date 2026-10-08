@@ -34,7 +34,6 @@ function mean(values: (number | null)[]): number | null {
 
 
 function Card({
-  icon,
   chip,
   label,
   value,
@@ -42,7 +41,6 @@ function Card({
   bar,
   barTone,
 }: {
-  icon: React.ReactNode;
   chip: string;
   label: string;
   value: string;
@@ -117,7 +115,6 @@ export function SummaryCards({
         return (
           <Card
             key={series.key}
-            icon={null}
             chip={series.tone.bar}
             label={series.label}
             value={average == null ? "—" : formatPercent(average)}
@@ -129,7 +126,6 @@ export function SummaryCards({
       })}
 
       <Card
-        icon={null}
         chip="bg-net"
         label="Network"
         // Ağın tavanı yok: %90 dolu bir ağ kartı diye bir şey ölçmüyoruz.
