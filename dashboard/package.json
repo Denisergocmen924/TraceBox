@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "TZ=UTC vitest run && TZ=Pacific/Kiritimati vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
