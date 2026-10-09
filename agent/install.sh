@@ -386,6 +386,7 @@ flush_cpu_threshold    = 90
 flush_ram_threshold    = 90
 flush_disk_threshold   = 95
 flush_cooldown_seconds = 10
+disk_flush_step_percent = 0.1
 
 spool_max_age_days = 10
 spool_max_size_mb  = 200

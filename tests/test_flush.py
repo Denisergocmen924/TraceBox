@@ -56,13 +56,58 @@ def make_reading(
     return MetricReading(sample=sample, ram_percent=ram_percent)
 
 
-def evaluate(reading: MetricReading, *, urgent: int = 0, config: Config = CONFIG) -> str | None:
+def evaluate(
+    reading: MetricReading,
+    *,
+    urgent: int = 0,
+    config: Config = CONFIG,
+    last_flush_at: str | None = None,
+    disk_mark: float | None = None,
+    log_filter: flush.LogRepeatFilter | None = None,
+    now: float = 1000.0,
+    logs: list[LogRecord] | None = None,
+) -> str | None:
+    """Yalnızca sebebi döndürür; çıpa/damga ayrıntısı için `verdict` kullanılır."""
+    return verdict(
+        reading,
+        urgent=urgent,
+        config=config,
+        last_flush_at=last_flush_at,
+        disk_mark=disk_mark,
+        log_filter=log_filter,
+        now=now,
+        logs=logs,
+    ).reason
+
+
+def verdict(
+    reading: MetricReading,
+    *,
+    urgent: int = 0,
+    config: Config = CONFIG,
+    last_flush_at: str | None = None,
+    disk_mark: float | None = None,
+    log_filter: flush.LogRepeatFilter | None = None,
+    now: float = 1000.0,
+    logs: list[LogRecord] | None = None,
+) -> flush.Verdict:
+    # `urgent=N` → birbirinden FARKLI N hata; her çağrı yeni bir filtre kullanır
+    # (verilmediyse), yani "ilk görülme" davranışı test edilir.
+    records = logs if logs is not None else [error_log(f"hata-{index}") for index in range(urgent)]
     return flush.evaluate(
         sample=reading.sample,
         ram_percent=reading.ram_percent,
-        urgent_log_count=urgent,
+        urgent_logs=records,
         config=config,
+        last_flush_at=last_flush_at,
+        disk_mark=disk_mark,
+        log_filter=log_filter or flush.LogRepeatFilter(),
+        now=now,
     )
+
+
+def error_log(message: str, source: str | None = None) -> LogRecord:
+    return LogRecord(timestamp=utc_now_iso(), level="error", message=message, source=source)
 
 
 def iso_seconds_ago(seconds: float) -> str:
@@ -389,7 +434,7 @@ def test_collect_logs_counts_only_the_urgent_levels(store, spool):
 
     urgent = loop._collect_logs(source, spool, store.load(), store)
 
-    assert urgent == 2
+    assert [record.level for record in urgent] == ["error", "critical"]
     assert spool.count() == 4, "acil olmayan loglar da spool'a yazılmalı"
 
 
@@ -397,12 +442,31 @@ def test_unreadable_log_source_reports_no_urgent_records(store, spool):
     """Log okunamadıysa acil log sayısı sıfırdır — flush uydurulmaz."""
     source = FakeLogSource(error=LogSourceError("journalctl yok"))
 
-    assert loop._collect_logs(source, spool, store.load(), store) == 0
+    assert loop._collect_logs(source, spool, store.load(), store) == []
 
 
-def maybe_flush(reading, store, spool, shipper, *, urgent: int = 0, config: Config = CONFIG):
+def maybe_flush(
+    reading,
+    store,
+    spool,
+    shipper,
+    *,
+    urgent: int = 0,
+    config: Config = CONFIG,
+    log_filter: flush.LogRepeatFilter | None = None,
+):
     state = store.load()
-    sent = loop._maybe_flush(reading, urgent, config, state, store, spool, shipper)
+    records = [error_log(f"hata-{index}") for index in range(urgent)]
+    sent = loop._maybe_flush(
+        reading,
+        records,
+        config,
+        state,
+        store,
+        spool,
+        shipper,
+        log_filter or flush.LogRepeatFilter(),
+    )
     return sent, state
 
 
@@ -538,3 +602,271 @@ def test_snapshot_enters_the_spool_before_the_send(store, spool):
     maybe_flush(make_reading(disk=99.0), store, spool, shipper)
 
     assert seen == [1], "gönderim anında snapshot henüz spool'da değildi"
+
+
+# --- disk: çıpa mandalı ----------------------------------------------------
+#
+# Disk doluluğu CPU gibi dalgalanmaz; "eşiğin üstünde kaldığı sürece flush"
+# kuralı sabit duran bir diskte her cooldown'da snapshot üretirdi. Kural:
+# ilk aşımda bir kez, sonra yalnızca dolmaya devam ettikçe.
+
+DISK_THRESHOLD = Config.flush_disk_threshold
+STEP = Config.disk_flush_step_percent
+
+
+def disk_verdict(percent: float | None, mark: float | None) -> flush.Verdict:
+    return verdict(make_reading(disk=percent), disk_mark=mark)
+
+
+def test_first_disk_crossing_flushes_once_and_sets_the_mark():
+    result = disk_verdict(DISK_THRESHOLD + 1.0, None)
+
+    assert result.reason == flush.REASON_DISK
+    assert result.disk_mark == DISK_THRESHOLD + 1.0
+
+
+def test_disk_that_stays_put_does_not_flush_again():
+    """Sabit duran dolu disk susar — kırmızı uyarı dashboard'un işi, flush'ın değil."""
+    mark = DISK_THRESHOLD + 1.0
+
+    result = disk_verdict(mark, mark)
+
+    assert result.reason is None
+    assert result.disk_mark == mark
+
+
+def test_disk_flushes_again_only_after_a_full_step():
+    mark = DISK_THRESHOLD + 1.0
+
+    assert disk_verdict(mark + STEP / 2, mark).reason is None
+    grown = disk_verdict(mark + STEP, mark)
+    assert grown.reason == flush.REASON_DISK
+    assert grown.disk_mark == mark + STEP
+
+
+def test_the_mark_ratchets_and_does_not_follow_the_disk_down():
+    """Disk geri çekilip aynı noktaya dönünce tekrar flush etmez."""
+    mark = DISK_THRESHOLD + 2.0
+
+    shrunk = disk_verdict(mark - 0.5, mark)
+
+    assert shrunk.reason is None
+    assert shrunk.disk_mark == mark, "çıpa diskle birlikte aşağı kaydı"
+
+
+def test_the_mark_clears_one_point_below_the_threshold():
+    """Eşiğin 1 puan altı = yeniden silahlanma; sonraki aşım yine 'ilk aşım'."""
+    assert disk_verdict(DISK_THRESHOLD - 1.0, 96.0).disk_mark == 96.0, "tam sınırda silinmemeli"
+    cleared = disk_verdict(DISK_THRESHOLD - 1.1, 96.0)
+
+    assert cleared.reason is None
+    assert cleared.disk_mark is None
+    assert disk_verdict(DISK_THRESHOLD + 0.5, cleared.disk_mark).reason == flush.REASON_DISK
+
+
+def test_flapping_around_the_threshold_does_not_flush_repeatedly():
+    """Eşiğin hemen altı-üstü arasında gidip gelen disk histerezisle susar."""
+    first = disk_verdict(DISK_THRESHOLD + 0.2, None)
+    assert first.reason == flush.REASON_DISK
+
+    mark = first.disk_mark
+    for percent in (DISK_THRESHOLD - 0.5, DISK_THRESHOLD + 0.2, DISK_THRESHOLD - 0.5):
+        result = disk_verdict(percent, mark)
+        assert result.reason is None
+        mark = result.disk_mark
+
+
+def test_unmeasurable_disk_keeps_the_mark():
+    assert disk_verdict(None, 96.0).disk_mark == 96.0
+
+
+def test_the_disk_step_comes_from_the_config():
+    wide = replace(CONFIG, disk_flush_step_percent=2.0)
+    reading = make_reading(disk=DISK_THRESHOLD + 1.5)
+
+    assert evaluate(reading, config=wide, disk_mark=DISK_THRESHOLD + 1.0) is None
+    assert evaluate(reading, disk_mark=DISK_THRESHOLD + 1.0) == flush.REASON_DISK
+
+
+# --- log: parmak izi ve sessizlik ------------------------------------------
+
+
+def test_fingerprint_masks_the_parts_that_change_on_every_repeat():
+    """PID, port, adres, UUID değişir; hata aynıdır."""
+    a = error_log("worker 4821 died at 0x7ffd12ab (req 3f2c9a10-1111-2222-3333-444455556666)", "app")
+    b = error_log("worker 97 died at 0x1 (req aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)", "app")
+
+    assert flush.log_fingerprint(a) == flush.log_fingerprint(b)
+
+
+def test_fingerprint_separates_different_errors_and_sources():
+    assert flush.log_fingerprint(error_log("disk full")) != flush.log_fingerprint(
+        error_log("connection refused")
+    )
+    assert flush.log_fingerprint(error_log("boom", "sshd")) != flush.log_fingerprint(
+        error_log("boom", "nginx")
+    )
+
+
+def test_a_plain_word_made_of_hex_letters_is_not_masked():
+    assert "decaffed" in flush.log_fingerprint(error_log("decaffed"))
+
+
+def test_first_error_flushes_and_an_identical_repeat_does_not():
+    log_filter = flush.LogRepeatFilter()
+    record = error_log("db down 1")
+
+    assert evaluate(make_reading(), logs=[record], log_filter=log_filter, now=0) == flush.REASON_LOG
+    assert evaluate(make_reading(), logs=[error_log("db down 2")], log_filter=log_filter, now=5) is None
+
+
+def test_a_different_error_flushes_even_during_another_ones_storm():
+    log_filter = flush.LogRepeatFilter()
+    evaluate(make_reading(), logs=[error_log("db down")], log_filter=log_filter, now=0)
+
+    other = evaluate(make_reading(), logs=[error_log("oom")], log_filter=log_filter, now=1)
+
+    assert other == flush.REASON_LOG
+
+
+def test_silence_rearms_the_same_error():
+    log_filter = flush.LogRepeatFilter()
+    silence = flush.LOG_SILENCE_SECONDS
+    evaluate(make_reading(), logs=[error_log("db down")], log_filter=log_filter, now=0)
+
+    still_quiet = evaluate(
+        make_reading(), logs=[error_log("db down")], log_filter=log_filter, now=silence - 1
+    )
+    rearmed = evaluate(
+        make_reading(), logs=[error_log("db down")], log_filter=log_filter, now=silence - 1 + silence
+    )
+
+    assert still_quiet is None
+    assert rearmed == flush.REASON_LOG
+
+
+def test_every_repeat_restarts_the_silence_clock():
+    """Süregiden bir hata döngüsü susmadığı için süresiz tek flush üretir."""
+    log_filter = flush.LogRepeatFilter()
+    silence = flush.LOG_SILENCE_SECONDS
+    evaluate(make_reading(), logs=[error_log("loop")], log_filter=log_filter, now=0)
+
+    for tick in range(1, 10):
+        assert (
+            evaluate(
+                make_reading(),
+                logs=[error_log("loop")],
+                log_filter=log_filter,
+                now=tick * (silence - 5),
+            )
+            is None
+        )
+
+
+def test_the_fingerprint_table_is_bounded():
+    log_filter = flush.LogRepeatFilter()
+    records = [error_log(f"unique-{'x' * index}") for index in range(flush._MAX_FINGERPRINTS + 50)]
+
+    log_filter.observe(records, 0)
+
+    assert len(log_filter._last_seen) <= flush._MAX_FINGERPRINTS
+
+
+# --- sayaçların birbirinden bağımsızlığı -----------------------------------
+
+
+def test_cpu_and_ram_share_one_cooldown_stamp():
+    """Kaynak sayacı tek: biri flush edince diğeri de cooldown'a girer."""
+    stamp = iso_seconds_ago(1)
+
+    assert evaluate(make_reading(cpu=99.0), last_flush_at=stamp) is None
+    assert evaluate(make_reading(ram_percent=99.0), last_flush_at=stamp) is None
+
+
+def test_resource_cooldown_does_not_silence_disk_or_log():
+    stamp = iso_seconds_ago(1)
+
+    assert evaluate(make_reading(disk=DISK_THRESHOLD + 1), last_flush_at=stamp) == flush.REASON_DISK
+    assert evaluate(make_reading(), urgent=1, last_flush_at=stamp) == flush.REASON_LOG
+
+
+def test_only_resource_flushes_stamp_the_resource_cooldown():
+    assert verdict(make_reading(cpu=99.0)).resource_fired is True
+    assert verdict(make_reading(disk=DISK_THRESHOLD + 1)).resource_fired is False
+    assert verdict(make_reading(), urgent=1).resource_fired is False
+
+
+def test_simultaneous_counters_produce_a_single_verdict_with_the_top_reason():
+    result = verdict(make_reading(cpu=99.0, disk=DISK_THRESHOLD + 1), urgent=1)
+
+    assert result.reason == flush.REASON_LOG
+    assert result.resource_fired is True
+    assert result.disk_mark == DISK_THRESHOLD + 1
+
+
+def test_disk_flush_does_not_start_the_resource_cooldown_in_the_loop(store, spool):
+    shipper = FakeShipper()
+
+    _, state = maybe_flush(make_reading(disk=DISK_THRESHOLD + 1), store, spool, shipper)
+
+    assert state.last_flush_at is None
+    assert state.disk_flush_mark == DISK_THRESHOLD + 1
+    assert store.load().disk_flush_mark == DISK_THRESHOLD + 1, "çıpa diske yazılmadı"
+
+
+def test_disk_mark_clearing_is_persisted_without_a_flush(store, spool):
+    state = store.load()
+    state.disk_flush_mark = 96.0
+    store.save(state)
+
+    sent, state = maybe_flush(make_reading(disk=DISK_THRESHOLD - 2), store, spool, FakeShipper())
+
+    assert sent is False
+    assert store.load().disk_flush_mark is None
+
+
+def test_repeated_error_in_the_loop_flushes_only_once(store, spool):
+    log_filter = flush.LogRepeatFilter()
+    shipper = FakeShipper()
+
+    first, _ = maybe_flush(make_reading(), store, spool, shipper, urgent=1, log_filter=log_filter)
+    second, _ = maybe_flush(make_reading(), store, spool, shipper, urgent=1, log_filter=log_filter)
+
+    assert first is True
+    assert second is False
+    assert len(shipper.calls) == 1
+
+
+# --- cooldown teşhisi -------------------------------------------------------
+
+
+def test_cooldown_suppressed_reasons_are_reported():
+    """Bastırılan cpu/ram, sessizce yutulmak yerine Verdict'te görünür."""
+    stamp = iso_seconds_ago(1)
+
+    result = verdict(make_reading(cpu=99.0, ram_percent=99.0), last_flush_at=stamp)
+
+    assert result.reason is None
+    assert result.cooldown_suppressed == (flush.REASON_RAM, flush.REASON_CPU)
+
+
+def test_nothing_is_reported_when_the_cooldown_is_over_or_the_machine_is_quiet():
+    assert verdict(make_reading(cpu=99.0)).cooldown_suppressed == ()
+    assert verdict(make_reading(), last_flush_at=iso_seconds_ago(1)).cooldown_suppressed == ()
+
+
+def test_suppressed_cpu_is_still_reported_when_another_counter_flushes():
+    result = verdict(make_reading(cpu=99.0, disk=DISK_THRESHOLD + 1), last_flush_at=iso_seconds_ago(1))
+
+    assert result.reason == flush.REASON_DISK
+    assert result.cooldown_suppressed == (flush.REASON_CPU,)
+
+
+def test_loop_logs_the_skipped_flush(store, spool, capsys):
+    state = store.load()
+    state.last_flush_at = iso_seconds_ago(1)
+    store.save(state)
+
+    maybe_flush(make_reading(cpu=99.0), store, spool, FakeShipper())
+
+    assert "cpu threshold exceeded, cooldown active — skipped" in capsys.readouterr().out

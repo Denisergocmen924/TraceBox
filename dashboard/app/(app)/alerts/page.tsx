@@ -205,7 +205,10 @@ export default function AlertsPage() {
             <span className="font-medium text-fg">Usage above threshold</span> —
             the latest sample crossed the level at which the agent flushes its
             spool immediately: CPU {FLUSH_THRESHOLD.cpu}%, memory{" "}
-            {FLUSH_THRESHOLD.ram}%, disk {FLUSH_THRESHOLD.disk}%.
+            {FLUSH_THRESHOLD.ram}%, disk {FLUSH_THRESHOLD.disk}%. The disk
+            alert stays for as long as the disk is over its level, even though
+            the agent flushes for it only once and then again only as usage
+            keeps rising.
           </li>
           <li>
             <span className="font-medium text-fg">High usage</span> — within{" "}

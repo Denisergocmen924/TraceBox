@@ -137,7 +137,13 @@ export function buildAlerts(devices: Device[], now: number): Alert[] {
         out.push({
           id: `${device.id}:${series.key}:over`,
           severity: "critical",
-          title: `${series.label} usage above ${limit}%`,
+          // Disk eşikte takılı kalabilir ve agent bu yüzden tekrar flush etmez
+          // (yalnızca dolmaya devam edince eder). Uyarı flush'a bağlı olmadığı
+          // için kullanıcıya sessizliğin arızayı göstermediğini söylüyoruz.
+          title:
+            series.key === "disk"
+              ? `Disk usage above ${limit}% — flushes only while it keeps filling`
+              : `${series.label} usage above ${limit}%`,
           deviceId: device.id,
           deviceName: device.device_name,
           at,

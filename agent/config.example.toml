@@ -43,6 +43,13 @@ flush_disk_threshold = 95
 # in the spool and leaves with the next send.
 flush_cooldown_seconds = 10
 
+# Disk fullness does not swing like CPU, so it does not flush on every sample.
+# The first time the disk goes past flush_disk_threshold it flushes once; after
+# that it flushes again only when usage climbs by this many percentage points.
+# It re-arms once usage falls 1 point below the threshold. The dashboard keeps
+# showing the red disk warning in between.
+disk_flush_step_percent = 0.1
+
 # --- Spool (local staging area) limits ---------------------------------------
 # The spool is a ring buffer: when either limit is crossed the oldest record is
 # dropped and the newest data is kept. These two limits are what stops the

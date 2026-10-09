@@ -162,13 +162,16 @@ def _level_summary(records: list[LogRecord]) -> str:
     return " ".join(f"{level}={counts[level]}" for level in LEVELS if counts[level])
 
 
-def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateStore) -> int:
+def _collect_logs(
+    source: LogSource, spool: Spool, state: State, store: StateStore
+) -> list[LogRecord]:
     """Cursor'dan beri biriken logları okuyup spool'a yazar.
 
-    Dönen değer, bu turda okunan error|critical kayıtların sayısıdır — acil
-    gönderim kararını döngü buna bakarak verir (CLAUDE.md §7). Sayı BURADA
-    üretilir çünkü kayıtlar yalnızca burada elde tutulur; spool'a yazıldıktan
-    sonra hangisinin bu turda geldiğini ayırt etmenin ucuz bir yolu kalmaz.
+    Dönen değer, bu turda okunan error|critical kayıtlardır — acil gönderim
+    kararını döngü buna bakarak verir (CLAUDE.md §7). Liste BURADA üretilir
+    çünkü kayıtlar yalnızca burada elde tutulur; spool'a yazıldıktan sonra
+    hangisinin bu turda geldiğini ayırt etmenin ucuz bir yolu kalmaz. Sayı değil
+    kayıtların kendisi dönüyor: flush aynı hatanın tekrarını metninden tanır.
 
     Pause'da da çalışır: metrik toplama gibi, log toplama da yerel kayıttır.
 
@@ -183,7 +186,7 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
         # Log kaynağı erişilemez diye metrik toplama ve gönderim durmaz;
         # tur log'suz sürer, sorun bir sonraki turda yeniden denenir.
         _log(f"[logs] could not read: {error}")
-        return 0
+        return []
 
     for record in records:
         spool.add(RECORD_LOG, _log_payload(record))
@@ -195,7 +198,7 @@ def _collect_logs(source: LogSource, spool: Spool, state: State, store: StateSto
     if records:
         _log(f"[logs] {len(records)} record(s) ({_level_summary(records)})")
 
-    return sum(1 for record in records if record.level in URGENT_LEVELS)
+    return [record for record in records if record.level in URGENT_LEVELS]
 
 
 def _prune_acked(state: State, store: StateStore, acked: list[str]) -> None:
@@ -311,12 +314,13 @@ def _send_spool(
 
 def _maybe_flush(
     reading: MetricReading,
-    urgent_log_count: int,
+    urgent_logs: list[LogRecord],
     config: Config,
     state: State,
     store: StateStore,
     spool: Spool,
     shipper: Shipper,
+    log_filter: flush_module.LogRepeatFilter,
 ) -> bool:
     """Eşik aşıldıysa acil gönderim yapar. Gönderim yapıldıysa True döner.
 
@@ -333,20 +337,34 @@ def _maybe_flush(
     if not state.logging_enabled:
         return False
 
-    reason = flush_module.evaluate(
+    verdict = flush_module.evaluate(
         sample=reading.sample,
         ram_percent=reading.ram_percent,
-        urgent_log_count=urgent_log_count,
+        urgent_logs=urgent_logs,
         config=config,
+        last_flush_at=state.last_flush_at,
+        disk_mark=state.disk_flush_mark,
+        log_filter=log_filter,
+        now=time.monotonic(),
     )
-    if reason is None:
-        return False
 
-    if flush_module.cooldown_active(state.last_flush_at, config.flush_cooldown_seconds):
-        # Veri kaybolmaz: eşiği aşan ölçüm de, tetikleyen log da spool'da
-        # duruyor ve normal gönderim turunda çıkacak. Bastırılan tek şey
-        # ACELE etmek — cooldown'ın amacı zaten flush selini önlemek.
-        _log(f"[flush] {reason} threshold exceeded, cooldown active — skipped.")
+    if verdict.cooldown_suppressed:
+        _log(
+            f"[flush] {', '.join(verdict.cooldown_suppressed)} threshold exceeded, "
+            "cooldown active — skipped."
+        )
+
+    # Disk çıpası flush olmasa da değişebilir (eşiğin altına inince silinir).
+    mark_changed = verdict.disk_mark != state.disk_flush_mark
+    state.disk_flush_mark = verdict.disk_mark
+
+    reason = verdict.reason
+    if reason is None:
+        # Cooldown'daki ya da bastırılan bir olayın verisi kaybolmaz: eşiği aşan
+        # ölçüm ve tetikleyen log spool'da duruyor, normal turda çıkacak.
+        # Bastırılan tek şey ACELE etmek.
+        if mark_changed:
+            store.save(state)
         return False
 
     # SIRA ÖNEMLİDİR: snapshot önce spool'a yazılır, sonra gönderim yapılır.
@@ -358,7 +376,10 @@ def _maybe_flush(
     # başlamış sayılır. Aksi halde collector erişilemezken eşik her turda
     # yeniden tutar, her tur yeni bir snapshot üretilir ve spool kesintinin
     # sürdüğü süre boyunca boş yere şişerdi.
-    state.last_flush_at = utc_now_iso()
+    # Yalnızca kaynak sayacı damgalanır: disk ve log kendi kurallarıyla
+    # bastırılıyor, onların flush'ı cpu/ram'in cooldown'ını başlatmamalı.
+    if verdict.resource_fired:
+        state.last_flush_at = utc_now_iso()
     store.save(state)
 
     if not shipper.ready():
@@ -392,6 +413,7 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
     )
     shipper = Shipper(spool)
     poller = CommandPoller()
+    log_filter = flush_module.LogRepeatFilter()
 
     _log(f"[start] TraceBox agent {__version__}")
     _log(f"[start] config: {loader.path}")
@@ -444,7 +466,9 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
                 # Flush gerçekten gönderdiyse normal gönderim sayacı ileri
                 # alınır — az önce boşalan spool'u saniyeler sonra bir kez daha
                 # yoklamanın anlamı yok.
-                if _maybe_flush(reading, urgent_logs, config, state, store, spool, shipper):
+                if _maybe_flush(
+                    reading, urgent_logs, config, state, store, spool, shipper, log_filter
+                ):
                     next_send = now + config.send_interval_seconds
 
             if now >= next_poll:

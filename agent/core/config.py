@@ -80,6 +80,10 @@ class Config:
     flush_ram_threshold: int = 90
     flush_disk_threshold: int = 95
     flush_cooldown_seconds: int = 10
+    # Disk eşiğin üstündeyken yeni bir flush için gereken artış (yüzde puanı).
+    # Disk doluluğu CPU gibi dalgalanmaz; sabit duran bir disk tekrar tekrar
+    # flush etmez, yalnızca dolmaya devam ettiğinde eder.
+    disk_flush_step_percent: float = 0.1
 
     # --- Spool sınırları ---
     spool_max_age_days: int = 10
@@ -136,6 +140,19 @@ def _positive_int(raw: dict, key: str, default: int) -> int:
     return value
 
 
+def _positive_number(raw: dict, key: str, default: float) -> float:
+    """_positive_int'in ondalıklı karşılığı: int de float da kabul edilir."""
+    if key not in raw:
+        return default
+
+    value = raw[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"'{key}' must be a number, got: {value!r}")
+    if value <= 0:
+        raise ConfigError(f"'{key}' must be greater than zero, got: {value}")
+    return float(value)
+
+
 def _parse(raw: dict, *, warn) -> Config:
     """Ayrıştırılmış TOML sözlüğünü doğrulanmış bir Config'e çevirir.
 
@@ -180,6 +197,7 @@ def _parse(raw: dict, *, warn) -> Config:
         flush_ram_threshold=_positive_int(raw, "flush_ram_threshold", 90),
         flush_disk_threshold=_positive_int(raw, "flush_disk_threshold", 95),
         flush_cooldown_seconds=_positive_int(raw, "flush_cooldown_seconds", 10),
+        disk_flush_step_percent=_positive_number(raw, "disk_flush_step_percent", 0.1),
         spool_max_age_days=_positive_int(raw, "spool_max_age_days", 10),
         spool_max_size_mb=_positive_int(raw, "spool_max_size_mb", 200),
         enabled_addons=tuple(addons),

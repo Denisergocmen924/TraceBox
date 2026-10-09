@@ -354,6 +354,19 @@ export default function SettingsPage() {
               command — pause, resume or delete — which the agent picks up on
               its next poll. Those buttons are on each host&rsquo;s own page.
             </p>
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              <span className="text-fg">Disk is the one threshold that does not
+              repeat.</span>{" "}
+              CPU and memory flush again and again while they stay high, because
+              nobody can tell when a crash will land. A disk does not swing like
+              that, so it flushes once when it first passes its threshold and
+              then only when usage climbs another step (
+              <Mono>disk_flush_step_percent</Mono>, 0.1 points by default). It
+              re-arms once usage falls a point below the threshold. Edit the step
+              in that host&rsquo;s own <Mono>config.toml</Mono>. The red disk
+              warning on the Hosts and Alerts pages does not depend on any of
+              this — it stays for as long as the disk is over the threshold.
+            </p>
           </div>
         </Card>
 
