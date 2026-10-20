@@ -63,6 +63,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
     );
     const description = params.get("error_description");
     if (!description) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- adres çubuğu yalnızca tarayıcıda okunabilir
     setError(description.replace(/\+/g, " "));
     // Adresi temizle: yenilenince aynı hata yeniden çıkmasın.
     window.history.replaceState(null, "", window.location.pathname);

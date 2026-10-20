@@ -37,7 +37,12 @@ export default function AppLayout({
 
   // Sayfa değişince çekmece kapanır. Kapanmasaydı dar ekranda kullanıcı bir
   // cihaza tıkladıktan sonra açık menünün arkasında kalırdı.
-  useEffect(() => setMenuOpen(false), [pathname]);
+  // (Effect yerine render sırasında düzeltme: ek bir render turu açmıyor.)
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
+    setMenuOpen(false);
+  }
 
   // "loading" ile "signedOut" ayrı tutuluyor (lib/useSession.ts): ikisini
   // birleştirmek her yenilemede giriş ekranına bir anlık sıçrama demek.

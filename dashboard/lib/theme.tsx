@@ -48,6 +48,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // zaten okudu ve uyguladı. İkinci kez okumak, iki kaynağın birbirinden
   // ayrılabileceği bir yol açardı.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM sunucuda yok; useState(başlangıç) içinde okumak hidrasyon uyuşmazlığı olurdu
     setState(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   }, []);
 

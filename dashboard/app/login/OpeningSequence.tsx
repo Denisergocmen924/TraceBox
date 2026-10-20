@@ -90,7 +90,9 @@ export function OpeningSequence({ onReveal }: Props) {
    * ve zamanlayıcılar sıfırlanırdı — film sonsuza kadar bitmezdi.
    */
   const reveal = useRef(onReveal);
-  reveal.current = onReveal;
+  useEffect(() => {
+    reveal.current = onReveal;
+  });
 
   // Çıkışın BİR KEZ başlamasını garanti eder: erken zamanlayıcı, onEnded,
   // onError ve zaman aşımı aynı anda gelebilir.

@@ -124,6 +124,7 @@ export default function LoginPage() {
     // Şifre kurtarma bağlantısıyla gelen kullanıcı bir işi bitirmeye geldi,
     // film izlemeye değil.
     if (reduced || seen || recovery) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- karar localStorage/matchMedia'ya bağlı, yalnızca tarayıcıda bilinir
       setOpening("skip");
       setRevealed(true);
     } else {

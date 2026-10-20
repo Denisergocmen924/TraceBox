@@ -306,6 +306,7 @@ export function LogList({
     restoring.current.clear();
     nodes.current.clear();
     blocksRef.current = [];
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- defter başa sarılırken state de sıfırlanmalı
     setBlocks([]);
     setLiveRows([]);
     setFinished(false);
@@ -494,10 +495,7 @@ export function LogList({
   const buffer = useRef<LogRow[]>([]);
 
   useEffect(() => {
-    if (!liveOn) {
-      setConnected(false);
-      return;
-    }
+    if (!liveOn) return;
 
     const allowed = FILTER_LEVELS[level];
     const stop = subscribeLogs({
@@ -532,6 +530,8 @@ export function LogList({
       stop();
       clearInterval(timer);
       buffer.current = [];
+      // Abonelik bırakılınca bağlantı da yok: bayrak yalan söylemesin.
+      setConnected(false);
     };
   }, [deviceId, level, liveOn]);
 
