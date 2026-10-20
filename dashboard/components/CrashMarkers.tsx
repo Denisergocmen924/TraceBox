@@ -20,7 +20,7 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   triggerStyle,
   type CrashProcess,
@@ -75,7 +75,12 @@ export function CrashMarkers({
    * geçtikten sonra, artık ekranda görünmeyen bir ana ait süreç listesine
    * bakmaya devam ederdi.
    */
-  useEffect(() => setSelectedId(null), [fromMs, toMs]);
+  // (Effect yerine render sırasında düzeltme: seçim bir kare bile bayat kalmaz.)
+  const [windowKey, setWindowKey] = useState(`${fromMs}-${toMs}`);
+  if (windowKey !== `${fromMs}-${toMs}`) {
+    setWindowKey(`${fromMs}-${toMs}`);
+    setSelectedId(null);
+  }
 
   const selected = snapshots.find((s) => s.id === selectedId) ?? null;
   const style = selected ? triggerStyle(selected.trigger_reason) : null;

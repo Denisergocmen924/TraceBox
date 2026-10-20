@@ -114,6 +114,7 @@ export default function SettingsPage() {
     );
     const description = params.get("error_description");
     if (description) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- adres çubuğu yalnızca tarayıcıda okunabilir
       setIdentError(description.replace(/\+/g, " "));
       window.history.replaceState(null, "", window.location.pathname);
     }

@@ -69,6 +69,7 @@ export default function OverviewPage() {
    */
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- yükleniyor bayrağı, istek başlarken kalkmalı
     setLoadingState(true);
 
     Promise.all([

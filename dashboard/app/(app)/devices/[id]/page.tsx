@@ -51,6 +51,7 @@ export default function DeviceDetailPage({
   }, [id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- açılışta veri çekimi + periyodik yenileme
     load();
     const refresh = setInterval(load, REFRESH_MS);
     return () => clearInterval(refresh);

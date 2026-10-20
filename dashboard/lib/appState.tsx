@@ -297,7 +297,9 @@ export function AppProvider({
    * sürüklemeyi dinleyen efekt de her saniye sökülüp yeniden takılırdı.
    */
   const windowRef = useRef(timeWindow);
-  windowRef.current = timeWindow;
+  useEffect(() => {
+    windowRef.current = timeWindow;
+  });
 
   /**
    * Aralık değişince yığın BOŞALIR. Kaba ayar ince ayarı geçersiz kılar:
@@ -407,6 +409,7 @@ export function AppProvider({
   }, [load]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- açılışta veri çekimi + periyodik yenileme
     load();
     const refresh = setInterval(load, REFRESH_MS);
     const tick = setInterval(() => setNow(Date.now()), 1000);
@@ -442,7 +445,6 @@ export function AppProvider({
       // düğmesi pencereyi sessizce geçmişe atardı — kullanıcının hiç
       // istemediği bir kayma. Uzun bir incelemeden sonra kenar bayatlamış
       // olabilir; ilk metrik haberinde tek adımda bugüne geliyor.
-      setLiveConnected(false);
       return;
     }
 
@@ -485,6 +487,8 @@ export function AppProvider({
     return () => {
       stop();
       clearInterval(timer);
+      // Abonelik bırakılınca bağlantı da yok: bayrak yalan söylemesin.
+      setLiveConnected(false);
     };
   }, [liveOn, spanMs, setEdge]);
 
