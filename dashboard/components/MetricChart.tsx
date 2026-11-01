@@ -146,7 +146,8 @@ export function MetricChart({
 
         <div className="min-w-0 flex-1">
           <div
-            className="relative cursor-crosshair select-none border-b border-l border-line"
+            className="relative select-none border-b border-l border-line"
+            // İmleç bilerek ayarlanmıyor: kullanıcının kendi imleci kalır.
             // Dikey kaydırma tarayıcıda kalır, yatay sürükleme seçime gider.
             style={{ height: `${height}px`, touchAction: "pan-y" }}
             onPointerMove={handleMove}
