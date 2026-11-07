@@ -104,6 +104,7 @@ type Drag = { from: number; to: number };
 export function Timeline({
   deviceId,
   ramTotalMb,
+  diskTotalMb,
   enabledAddons = [],
   heading,
   href,
@@ -114,6 +115,8 @@ export function Timeline({
       künye 10 saniyede bir yenilendiği için tüm nesneye bağlanmak, hiçbir şey
       değişmese bile grafiğin geometrisini yeniden hesaplatırdı. */
   ramTotalMb: number | null;
+  /** Disk tooltip/lejantındaki mutlak değer için; yoksa yalnızca yüzde yazılır. */
+  diskTotalMb: number | null;
   /** Cihazın açık eklentileri; her türün grafiği yalnızca açıksa çıkar
       (lib/addons.ts). Liste her yenilemede yeni bir dizi olabilir, bu yüzden
       türetme aşağıda içeriğe göre anahtarlanıyor. */
@@ -329,8 +332,8 @@ export function Timeline({
   /* --- türetilenler ------------------------------------------------------ */
 
   const hardware = useMemo(
-    () => hardwareTracks(buckets, ramTotalMb, widthMs),
-    [buckets, ramTotalMb, widthMs],
+    () => hardwareTracks(buckets, ramTotalMb, diskTotalMb, widthMs),
+    [buckets, ramTotalMb, diskTotalMb, widthMs],
   );
 
   const network = useMemo(
