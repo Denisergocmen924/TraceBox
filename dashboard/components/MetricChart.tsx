@@ -8,7 +8,9 @@
  * ve eksen mantığı iki kez yaşardı; biri düzeltilir, öteki unutulurdu.
  *
  * Tek çizim alanı, çizgiler ÜST ÜSTE. Y ekseni solda, kılavuzlar kesikli,
- * gösterge çizim alanının içinde sağ üstte, saat etiketleri altta. Overview'daki
+ * saat etiketleri altta. Gösterge (ChartLegend) çizim alanında DEĞİL, grafiğin
+ * başlık bandında: çizgiler %90 üstüne çıkınca ya da kilitli grafikte sağ kenara
+ * yaslanınca göstergenin altından geçip okunmaz hâle geliyordu. Overview'daki
  * geniş grafikle aynı dil — iki ekranın iki ayrı grafik dili konuşması marka
  * tutarlılığını bozardı (§9.11.1: "görsel dil birebir alınır").
  *
@@ -317,40 +319,6 @@ export function MetricChart({
                   </span>
                 );
               })}
-
-            {/* --- gösterge (referans: grafiğin İÇİNDE sağ üstte) ------------
-                İmleç varken aynı yerde DEĞERİ de yazıyor. Ayrı bir yüzen kutu
-                açmak yerine göstergeyi çift işlevli yapmak, referansın
-                yerleşimini bozmadan okumayı çözüyor. Değer izin KENDİ biriminde
-                (RAM'de GB, ağda Mbps): eksen zaten ölçeği söylüyor. */}
-            <div className="pointer-events-none absolute right-2 top-2 flex flex-wrap justify-end gap-x-4 gap-y-1">
-              {tracks.map((track) => {
-                const band = hovered ? track.pick(hovered) : null;
-                return (
-                  <span
-                    key={`legend-${track.key}`}
-                    className="flex items-center gap-1.5 text-xs text-muted"
-                  >
-                    <span
-                      className={
-                        track.dashed
-                          ? // Kesikli göstergeyi maskeyle çiziyoruz: renk zaten
-                            // `bg-*` sınıfında, tekrar yazsaydık palet iki
-                            // yerde tanımlanmış olurdu.
-                            `h-[3px] w-3.5 ${track.tone.bar} [mask-image:repeating-linear-gradient(to_right,#000_0_4px,transparent_4px_7px)]`
-                          : `h-[3px] w-3.5 rounded-full ${track.tone.bar}`
-                      }
-                    />
-                    {track.label}
-                    {band?.avg != null && (
-                      <span className="tabular-nums font-medium text-fg">
-                        {track.format(band.avg)}
-                      </span>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
           </div>
 
           {/* --- x ekseni ------------------------------------------------- */}
@@ -372,6 +340,50 @@ export function MetricChart({
       </div>
 
       {note && <p className="mt-3 text-[11px] text-faint">{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * Gösterge: seri adı + renk/çizgi stili; imleç varken aynı yerde DEĞERİ de
+ * yazar. Değer izin KENDİ biriminde (RAM'de GB, ağda Mbps): eksen zaten ölçeği
+ * söylüyor. Dar genişlikte satır kırılır, başlığın üstüne binmez.
+ */
+export function ChartLegend({
+  tracks,
+  hovered,
+}: {
+  tracks: Track[];
+  hovered: MetricBucket | null;
+}) {
+  return (
+    <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
+      {tracks.map((track) => {
+        const band = hovered ? track.pick(hovered) : null;
+        return (
+          <span
+            key={`legend-${track.key}`}
+            className="flex items-center gap-1.5 text-xs text-muted"
+          >
+            <span
+              className={
+                track.dashed
+                  ? // Kesikli göstergeyi maskeyle çiziyoruz: renk zaten
+                    // `bg-*` sınıfında, tekrar yazsaydık palet iki
+                    // yerde tanımlanmış olurdu.
+                    `h-[3px] w-3.5 ${track.tone.bar} [mask-image:repeating-linear-gradient(to_right,#000_0_4px,transparent_4px_7px)]`
+                  : `h-[3px] w-3.5 rounded-full ${track.tone.bar}`
+              }
+            />
+            {track.label}
+            {band?.avg != null && (
+              <span className="tabular-nums font-medium text-fg">
+                {track.format(band.avg)}
+              </span>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }

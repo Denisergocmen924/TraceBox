@@ -71,6 +71,7 @@ import {
   plotEndMs,
   tracksCeiling,
   type MetricBucket,
+  type Track,
 } from "@/lib/metrics";
 import { addonPanels } from "@/lib/addons";
 import { fetchCrashSnapshots, type CrashSnapshot } from "@/lib/crashes";
@@ -82,7 +83,7 @@ import {
   IconExpand,
   IconZoom,
 } from "@/components/icons";
-import { MetricChart } from "@/components/MetricChart";
+import { ChartLegend, MetricChart } from "@/components/MetricChart";
 import { CrashMarkers } from "@/components/CrashMarkers";
 
 /**
@@ -512,6 +513,13 @@ export function Timeline({
 
       {!error && buckets.length > 0 && (
         <>
+          <ChartHeader
+            title="Resources"
+            subtitle="CPU, RAM and disk usage"
+            tracks={hardware}
+            hovered={hovered}
+            className="border-b-0"
+          />
           <MetricChart
             {...shared}
             tracks={hardware}
@@ -527,12 +535,12 @@ export function Timeline({
               şeymiş gibi okunur, ikinci eksenin farklı birimde olduğu gözden
               kaçardı. */}
           <div className="border-t border-line">
-            <div className="flex items-baseline gap-2 px-5 pt-4">
-              <h3 className="text-sm font-medium">Network</h3>
-              <span className="text-[11px] text-faint">
-                traffic in and out of this host
-              </span>
-            </div>
+            <ChartHeader
+              title="Network"
+              subtitle="traffic in and out of this host"
+              tracks={network.tracks}
+              hovered={hovered}
+            />
             {network.tracks.length === 0 ? (
               <p className="px-5 py-10 text-center text-sm text-muted">
                 No network samples in this range.
@@ -553,10 +561,12 @@ export function Timeline({
               eksenini ve imleci paylaşıyor. */}
           {addons.map((panel) => (
             <div key={panel.key} className="border-t border-line">
-              <div className="flex items-baseline gap-2 px-5 pt-4">
-                <h3 className="text-sm font-medium">{panel.title}</h3>
-                <span className="text-[11px] text-faint">{panel.subtitle}</span>
-              </div>
+              <ChartHeader
+                title={panel.title}
+                subtitle={panel.subtitle}
+                tracks={panel.tracks}
+                hovered={hovered}
+              />
               {panel.tracks.length === 0 ? (
                 <p className="px-5 py-10 text-center text-sm text-muted">
                   No {panel.title.toLowerCase()} samples in this range.
@@ -575,5 +585,36 @@ export function Timeline({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Grafiğin başlık bandı: solda başlık + alt açıklama, sağda gösterge.
+ * Gösterge çizim alanının dışında durur; dar genişlikte `flex-wrap` onu alta
+ * indirir, başlığın üstüne bindirmez.
+ */
+function ChartHeader({
+  title,
+  subtitle,
+  tracks,
+  hovered,
+  className = "",
+}: {
+  title: string;
+  subtitle: string;
+  tracks: Track[];
+  hovered: MetricBucket | null;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 pt-4 ${className}`}
+    >
+      <div className="flex min-w-0 items-baseline gap-2">
+        <h3 className="text-sm font-medium">{title}</h3>
+        <span className="text-[11px] text-faint">{subtitle}</span>
+      </div>
+      <ChartLegend tracks={tracks} hovered={hovered} />
+    </div>
   );
 }
