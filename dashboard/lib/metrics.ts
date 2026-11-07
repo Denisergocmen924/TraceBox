@@ -87,9 +87,31 @@ export function num(value: number, digits = 1): string {
   return value.toLocaleString("en-GB", { maximumFractionDigits: digits });
 }
 
-/** 6820 → "6.7 GB". Kartta MB yazmak okunaksız. */
-function gbShort(mb: number | null | undefined): string {
-  return mb == null ? "—" : `${num(mb / 1024)} GB`;
+/** 6820 → "6.7 GB", 447 → "447 MB". 1024 MB ve üstü GB, altı MB yazılır. */
+export function formatAmount(mb: number): string {
+  return mb >= 1024 ? `${num(mb / 1024)} GB` : `${num(mb, 0)} MB`;
+}
+
+/**
+ * Bir ölçünün tek okunuş biçimi: yüzde önce, mutlak değer parantez içinde.
+ *
+ *   cpu  → "34%"            (mutlak birimi yok)
+ *   ram  → "63% (1.2 GB)"
+ *   disk → "61% (5.9 GB)"
+ *
+ * `totalMb` ölçünün kapasitesi (RAM / disk toplamı). Envanter henüz gelmediyse
+ * null/0 olur; o zaman mutlak değer uydurulmaz, yalnızca yüzde yazılır.
+ * Mutlak değer yüzdeden türetilir: veritabanında disk için yalnızca yüzde var.
+ */
+export function usageText(
+  key: MetricKey,
+  percent: number | null | undefined,
+  totalMb: number | null | undefined,
+): string {
+  if (percent == null) return "—";
+  const pct = `${num(percent, 0)}%`;
+  if (key === "cpu" || !totalMb || totalMb <= 0) return pct;
+  return `${pct} (${formatAmount((percent / 100) * totalMb)})`;
 }
 
 export type MetricKey = "cpu" | "ram" | "disk";
@@ -131,7 +153,11 @@ export type SeriesDef = {
   /** Son metrik satırından 0–100 oranı; ölçülmediyse null. */
   percent: (m: LatestMetric, ramTotalMb: number | null) => number | null;
   /** Son metrik satırının okunur hâli — kartın sağındaki yazı. */
-  display: (m: LatestMetric, ramTotalMb: number | null) => string;
+  display: (
+    m: LatestMetric,
+    ramTotalMb: number | null,
+    diskTotalMb: number | null,
+  ) => string;
 };
 
 export const SERIES: SeriesDef[] = [
@@ -148,7 +174,7 @@ export const SERIES: SeriesDef[] = [
     },
     pick: (b) => ({ min: b.cpu_min, max: b.cpu_max, avg: b.cpu_avg }),
     percent: (m) => m.cpu_percent,
-    display: (m) => (m.cpu_percent == null ? "—" : `${num(m.cpu_percent, 0)}%`),
+    display: (m) => usageText("cpu", m.cpu_percent, null),
   },
   {
     key: "ram",
@@ -166,10 +192,14 @@ export const SERIES: SeriesDef[] = [
     // 64 GB'lıkta sıradan. Oran ancak envanterle birlikte anlam kazanıyor.
     percent: (m, total) =>
       m.ram_used_mb != null && total ? (m.ram_used_mb / total) * 100 : null,
-    display: (m, total) =>
-      m.ram_used_mb == null
-        ? "—"
-        : `${gbShort(m.ram_used_mb)} / ${gbShort(total)}`,
+    display: (m, ramTotal) =>
+      usageText(
+        "ram",
+        m.ram_used_mb != null && ramTotal
+          ? (m.ram_used_mb / ramTotal) * 100
+          : null,
+        ramTotal,
+      ),
   },
   {
     key: "disk",
@@ -184,7 +214,8 @@ export const SERIES: SeriesDef[] = [
     },
     pick: (b) => ({ min: b.disk_min, max: b.disk_max, avg: b.disk_avg }),
     percent: (m) => m.disk_percent,
-    display: (m) => (m.disk_percent == null ? "—" : `${num(m.disk_percent, 0)}%`),
+    display: (m, _ramTotal, diskTotal) =>
+      usageText("disk", m.disk_percent, diskTotal),
   },
 ];
 
@@ -386,6 +417,7 @@ export function buildSegments(
 export function hardwareTracks(
   buckets: MetricBucket[],
   ramTotalMb: number | null,
+  diskTotalMb: number | null,
   widthMs: number,
 ): Track[] {
   const tracks: Track[] = [];
@@ -403,7 +435,9 @@ export function hardwareTracks(
       scale,
       segments: buildSegments(points, scale, widthMs),
       pick: def.pick,
-      format: (v) => formatValue(def, v),
+      // v ölçünün ham birimi; scale ile ortak yüzde eksenine taşınır.
+      format: (v) =>
+        usageText(def.key, v * scale, def.key === "ram" ? ramTotalMb : diskTotalMb),
     });
   }
   return tracks;
@@ -597,11 +631,6 @@ export function formatDuration(ms: number): string {
   const hours = minutes / 60;
   if (hours < 36) return `${num(hours)} hours`;
   return `${num(hours / 24)} days`;
-}
-
-export function formatValue(series: SeriesDef, value: number): string {
-  if (series.unit === "percent") return `${num(value, 0)}%`;
-  return value >= 1024 ? `${num(value / 1024)} GB` : `${num(value, 0)} MB`;
 }
 
 /** "23%", ölçüm yoksa çağıran "—" yazar. Yüzde işareti SONRA — ürün İngilizce. */

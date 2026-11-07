@@ -110,7 +110,7 @@ export function DeviceCard({ device, now }: { device: Device; now: number }) {
             key={series.key}
             series={series}
             percent={m ? series.percent(m, device.ram_total_mb) : null}
-            value={m ? series.display(m, device.ram_total_mb) : "—"}
+            value={m ? series.display(m, device.ram_total_mb, device.disk_total_mb) : "—"}
           />
         ))}
       </div>
