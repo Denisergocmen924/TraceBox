@@ -23,6 +23,22 @@ permissions:
   contents: read
 
 jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu çek (tam geçmiş)
+        uses: actions/checkout@v4
+        with:
+          # Varsayılan yalnızca son commit'i çeker; gitleaks geçmişi tarayacağı
+          # için hepsi gerekir. Yoksa sessizce yeşil verir.
+          fetch-depth: 0
+      - name: Sır taraması
+        # Gitleaks sürümü sabit, elle yükseltilir (Latest version v8.30.1 2026 yılı mart ayında yayınlanmış).
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 \
+            detect --source /repo --verbose --redact
+
   test:
     runs-on: ubuntu-latest
 
