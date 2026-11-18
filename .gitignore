@@ -73,6 +73,8 @@ Thumbs.db
 # Makinede duran, repoya girmeyen yardımcı dosyalar.
 CLAUDE.md
 md/
+GrandSage.md
+GrandSage/
 
 # --- YEREL ÖRNEK DASHBOARD GÖRSELLERİ VE DEPLOY SCRİPTİ ----------------------------------------
 dashboard/example
