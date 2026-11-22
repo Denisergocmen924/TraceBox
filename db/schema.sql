@@ -57,9 +57,6 @@ create table accounts (
   -- olmadığından dashboard üzerinden değiştirilemez — policy, config değil.
   retention_days integer     not null default 10,
 
-  -- TraceBox'ın kendi ürün planı; Supabase'in faturalandırma planından bağımsız.
-  plan           text        not null default 'free',
-
   created_at     timestamptz not null default now()
 );
 

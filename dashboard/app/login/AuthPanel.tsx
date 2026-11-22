@@ -12,17 +12,13 @@
  *     "Confirm email" AÇIK olmalı — kapalıyken bu ekran yine çalışır ama fren
  *     kalkmış olur.
  *
- *  2. GitHub / Google ile giriş VAR (eski "OAuth yok" kararı tersine çevrildi).
- *     Ayrıntı ve gerekçe: md/memory/decisions.md. Sağlayıcı listesi tek yerde:
- *     lib/oauthProviders.tsx.
- *
- *  3. Ad / soyad SORULMUYOR.
+ *  2. Ad / soyad SORULMUYOR.
  *     `accounts` tablosunda böyle bir sütun yok; sormak bir migration ve onu
  *     gösterecek bir yer gerektirirdi. Kullanıcı üst çubukta zaten e-postasıyla
  *     tanınıyor. Kullanmadığımız veriyi toplamamak, gizlilik tarafında da
  *     doğru cevap.
  *
- *  4. ToS YOK.
+ *  3. ToS YOK.
  *     Uydurma bir "Terms of Service" yazmak, olmayan bir tüzel kişiliğin
  *     sözünü vermek olurdu.
  */
@@ -32,7 +28,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
-import { OAUTH_PROVIDERS, type OAuthProviderId } from "@/lib/oauthProviders";
 import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
 
 type Mode = "signin" | "signup";
@@ -50,12 +45,10 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
   const [resetting, setResetting] = useState(false);
 
   /*
-   * OAuth dönüşü HATALI olabilir: GitHub'da kullanıcı izni reddeder, ya da
-   * hesabın e-postası yoktur (Supabase'de "e-postasız kullanıcı"ya izin
-   * KAPALI — giriş, hesap silme onayı ve künye e-postaya dayanıyor). Supabase
-   * hatayı adres çubuğuna yazar, yani yakalamazsak kullanıcı sebepsiz yere
-   * boş bir giriş formuna düşerdi. Sorgu da parça da (#) okunuyor: hangisine
-   * yazıldığı akış türüne bağlı.
+   * E-posta bağlantısı (doğrulama, şifre kurtarma) HATALI dönebilir: bağlantının
+   * süresi dolmuş ya da daha önce kullanılmıştır. Supabase hatayı adres çubuğuna
+   * yazar, yani yakalamazsak kullanıcı sebepsiz yere boş bir giriş formuna
+   * düşerdi. Sorgu da parça da (#) okunuyor: hangisine yazıldığı akış türüne bağlı.
    */
   useEffect(() => {
     const params = new URLSearchParams(
@@ -68,23 +61,6 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
     // Adresi temizle: yenilenince aynı hata yeniden çıkmasın.
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
-
-  async function signInWithProvider(provider: OAuthProviderId) {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    // Başarılıysa tarayıcı sağlayıcıya gider ve sayfa terk edilir; busy'yi geri
-    // açmaya gerek yok. Dönüşte /login'e inilir, oturum varsa sayfa kullanıcıyı
-    // içeri alır (app/login/page.tsx).
-    const { error } = await supabase().auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/login` },
-    });
-    if (error) {
-      setError(error.message);
-      setBusy(false);
-    }
-  }
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -251,31 +227,6 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
               {m === "signin" ? "Sign in" : "Create account"}
             </button>
           ))}
-        </div>
-
-        {/* --- sağlayıcı ile giriş ------------------------------------------
-            Kayıt ve giriş için AYNI düğme: sağlayıcı hesabıyla ilk girişte Supabase hesabı
-            oluşturur. İki kipte ayrı düğme olması kullanıcıya olmayan bir
-            fark anlatırdı. */}
-        <div className="mt-6 space-y-2.5">
-          {OAUTH_PROVIDERS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => signInWithProvider(id)}
-              disabled={busy}
-              className="flex w-full items-center justify-center gap-2.5 rounded-md border border-line bg-panel-2 px-3 py-3 text-sm font-medium transition hover:border-accent disabled:opacity-50"
-            >
-              <Icon className="size-[18px]" />
-              Continue with {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-5 flex items-center gap-3 text-xs text-faint">
-          <span className="h-px flex-1 bg-line" />
-          or
-          <span className="h-px flex-1 bg-line" />
         </div>
 
         <label className="mt-5 block text-sm text-muted" htmlFor="email">

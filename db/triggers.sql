@@ -7,7 +7,7 @@
 -- ÇÖZÜLEN SORUN:
 --   Supabase Auth kullanıcıyı auth.users içinde oluşturur; bizim accounts
 --   tablomuzdan haberi yoktur. Bu satırı uygulama kodunda açsaydık ("kayıt
---   sonrası bir de accounts insert et") her kayıt yolu (e-posta, OAuth, davet,
+--   sonrası bir de accounts insert et") her kayıt yolu (e-posta, davet,
 --   dashboard'dan manuel ekleme) bu adımı ayrı ayrı hatırlamak zorunda kalırdı;
 --   biri unutulunca kullanıcı hesapsız kalır ve RLS yüzünden HİÇBİR ŞEY göremez.
 --   Trigger, kuralı veritabanına gömer: kayıt yolu ne olursa olsun satır açılır.
