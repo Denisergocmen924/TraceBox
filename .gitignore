@@ -72,6 +72,7 @@ Thumbs.db
 # --- YEREL ÇALIŞMA DOSYALARI -------------------------------------------------
 # Makinede duran, repoya girmeyen yardımcı dosyalar.
 CLAUDE.md
+SIMPLIFY.md
 md/
 GrandSage.md
 GrandSage/
