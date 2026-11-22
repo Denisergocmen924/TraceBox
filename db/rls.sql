@@ -50,7 +50,7 @@ create policy sel_accounts on public.accounts
   for select
   using (id = (select auth.uid()));
 
--- UPDATE politikası BİLEREK YOK: retention_days ve plan birer POLICY'dir
+-- UPDATE politikası BİLEREK YOK: retention_days bir POLICY'dir
 -- (sistem sınırı), kullanıcının değiştirebileceği bir config değil.
 -- Kullanıcı kendi retention'ını 3650 güne çekebilseydi fatura mantrası
 -- ("az yaz, seyrek çek, kısa sakla") anlamsızlaşırdı.

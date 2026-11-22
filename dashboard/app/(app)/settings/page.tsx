@@ -8,7 +8,7 @@
  *     o insan makinenin sahibi ve ayar makinede duruyor (/etc/tracebox/config.toml,
  *     §4.3). Dashboard'dan yazılamaz — yazılabilseydi tek yazar kuralı kırılır,
  *     agent'ın diskteki dosyası ile bulutun kopyası ayrışırdı.
- *   - Saklama süresi ve plan → POLICY. Sistem sınırı; kullanıcı kendi faturasını
+ *   - Saklama süresi → POLICY. Sistem sınırı; kullanıcı kendi faturasını
  *     kendi büyütemesin diye salt okunur.
  *   - Tema → gerçekten kullanıcının, gerçekten burada.
  *
@@ -18,21 +18,18 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/lib/appState";
 import { useTheme } from "@/lib/theme";
-import { useSession } from "@/lib/useSession";
 import { fetchAccount, type Account } from "@/lib/account";
 import { supabase } from "@/lib/supabase";
 import { deleteAccount } from "@/lib/collector";
 import { localDateTime } from "@/lib/time";
 import { errorMessage } from "@/lib/errors";
 import { PASSWORD_RULE_HINT, passwordProblem } from "@/lib/password";
-import { OAUTH_PROVIDERS, providerLabel, type OAuthProviderId } from "@/lib/oauthProviders";
 import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordInput } from "@/components/PasswordInput";
-import type { UserIdentity } from "@supabase/supabase-js";
 import { IconMoon, IconSun, IconTrash } from "@/components/icons";
 
 /** Künye satırı: solda etiket + gerekçe, sağda değer. */
@@ -88,74 +85,6 @@ function Mono({ children }: { children: React.ReactNode }) {
 export default function SettingsPage() {
   const { email, accountId, devices } = useApp();
   const { theme, setTheme } = useTheme();
-
-  // Kimlikler Supabase'den okunur (`user_identities`): oturum jetonundaki
-  // app_metadata bağlama/çözmeden sonra bayat kalır, bu liste her çağrıda taze.
-  // Şifre yalnızca "email" kimliği olan hesapta var: yalnızca GitHub ile girmiş
-  // birinin değiştirecek şifresi yoktur; birleşmiş hesapta "email" de listede
-  // olduğu için düğme çıkar.
-  const { session } = useSession();
-  const [identities, setIdentities] = useState<UserIdentity[] | null>(null);
-  const [identError, setIdentError] = useState<string | null>(null);
-  const [identBusy, setIdentBusy] = useState<string | null>(null);
-  const [unlinkTarget, setUnlinkTarget] = useState<UserIdentity | null>(null);
-
-  const loadIdentities = useCallback(async () => {
-    const { data, error } = await supabase().auth.getUserIdentities();
-    if (error) setIdentError(error.message);
-    else setIdentities(data.identities);
-  }, []);
-
-  useEffect(() => {
-    // Bağlama GitHub'a gidip /settings'e DÖNEREK biter; hata (ör. o GitHub
-    // hesabı başka bir kullanıcıya bağlı) adres çubuğunda gelir.
-    const params = new URLSearchParams(
-      window.location.hash.replace(/^#/, "") || window.location.search,
-    );
-    const description = params.get("error_description");
-    if (description) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- adres çubuğu yalnızca tarayıcıda okunabilir
-      setIdentError(description.replace(/\+/g, " "));
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    void loadIdentities();
-  }, [loadIdentities]);
-
-  const providers = (session?.user.app_metadata?.providers as string[] | undefined) ?? [];
-  const hasPassword = identities
-    ? identities.some((i) => i.provider === "email")
-    : providers.includes("email");
-
-  // Şifresiz hesapta "GitHub", "Google" ya da "GitHub and Google".
-  const signInNames =
-    (identities ?? [])
-      .map((i) => providerLabel(i.provider))
-      .join(" and ") || "your provider";
-
-  async function handleLink(provider: OAuthProviderId) {
-    setIdentBusy(provider);
-    setIdentError(null);
-    // Başarılıysa tarayıcı sağlayıcıya gider; busy'yi açmaya gerek yok.
-    const { error } = await supabase().auth.linkIdentity({
-      provider,
-      options: { redirectTo: `${window.location.origin}/settings` },
-    });
-    if (error) {
-      setIdentError(error.message);
-      setIdentBusy(null);
-    }
-  }
-
-  async function handleUnlink() {
-    if (!unlinkTarget) return;
-    setIdentBusy(unlinkTarget.provider);
-    setIdentError(null);
-    const { error } = await supabase().auth.unlinkIdentity(unlinkTarget);
-    setUnlinkTarget(null);
-    setIdentBusy(null);
-    if (error) setIdentError(error.message);
-    else await loadIdentities();
-  }
 
   const [account, setAccount] = useState<Account | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -291,11 +220,6 @@ export default function SettingsPage() {
           >
             <Mono>{accountId}</Mono>
           </Row>
-          <Row label="Plan">
-            <span className="rounded-md bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent uppercase">
-              {account?.plan ?? "—"}
-            </span>
-          </Row>
           <Row label="Member since">
             <span className="tabular-nums text-muted">
               {account ? localDateTime(account.created_at) : "—"}
@@ -405,94 +329,27 @@ export default function SettingsPage() {
           </Row>
         </Card>
 
-        {/* --- bağlı hesaplar ------------------------------------------- */}
-        <Card
-          title="Connected accounts"
-          description="Sign-in methods linked to this TraceBox account. Any linked method opens the same account and the same hosts."
-        >
-          {/* Unlink yalnızca TraceBox'taki bağlantıyı siler; sağlayıcıdaki izin
-              (grant) onda kalır. Bu HER OAuth sağlayıcısı için geçerli, o yüzden
-              not satır başına değil kartın başında. */}
-          <p className="border-b border-line px-4 sm:px-5 py-3 text-xs text-danger/80">
-            Unlinking only removes the connection on TraceBox. To fully revoke access, also
-            remove TraceBox from the provider&apos;s own settings. Signing in again with the
-            same verified email links it back automatically.
-          </p>
-          {OAUTH_PROVIDERS.map(({ id, label, Icon }) => {
-            const identity = identities?.find((i) => i.provider === id);
-            // Son kimlik çözülemez: hesaba girişin tek yolu kalmaz. Supabase de
-            // reddeder; düğmeyi hiç göstermemek hata mesajından iyidir.
-            const canUnlink = !!identities && identities.length > 1;
-            const email = identity?.identity_data?.email as string | undefined;
-            return (
-              <Row
-                key={id}
-                label={label}
-                hint={
-                  identity
-                    ? `Linked${email ? ` as ${email}` : ""}.`
-                    : identities
-                      ? "Not linked. Linking lets you sign in with this provider as well."
-                      : "Loading…"
-                }
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className="size-[18px] text-muted" />
-                  {identity ? (
-                    <button
-                      onClick={() => setUnlinkTarget(identity)}
-                      disabled={!canUnlink || identBusy !== null}
-                      title={canUnlink ? undefined : "This is your only sign-in method."}
-                      className="rounded-md border border-line bg-panel px-3.5 py-2.5 text-sm text-muted transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-muted"
-                    >
-                      Unlink
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleLink(id)}
-                      disabled={!identities || identBusy !== null}
-                      className="rounded-md border border-line bg-panel-2 px-3.5 py-2.5 text-sm font-medium transition hover:border-accent disabled:opacity-50"
-                    >
-                      {identBusy === id ? "Redirecting…" : "Link"}
-                    </button>
-                  )}
-                </div>
-              </Row>
-            );
-          })}
-          {identError && <p className="px-4 sm:px-5 pb-4 text-xs text-danger">{identError}</p>}
-        </Card>
-
         {/* --- yıkıcı işlem: hesap silme (§9.10) -------------------------- */}
         <Card
           title="Danger zone"
           description="Actions that affect your sign-in or remove your account."
         >
-          {hasPassword ? (
-            <Row
-              label="Change password"
-              hint="Your current password stops working as soon as the new one is set. Hosts are not affected."
+          <Row
+            label="Change password"
+            hint="Your current password stops working as soon as the new one is set. Hosts are not affected."
+          >
+            <button
+              onClick={() => {
+                setPwFormError(null);
+                setPwNotice(null);
+                setPwStep("form");
+              }}
+              className="rounded-md border border-danger/40 px-3.5 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/10"
             >
-              <button
-                onClick={() => {
-                  setPwFormError(null);
-                  setPwNotice(null);
-                  setPwStep("form");
-                }}
-                className="rounded-md border border-danger/40 px-3.5 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/10"
-              >
-                Change password
-              </button>
-              {pwNotice && <p className="mt-2 text-xs text-ok">{pwNotice}</p>}
-            </Row>
-          ) : (
-            <Row
-              label="Password"
-              hint={`You sign in with ${signInNames}, so there is no password to change.`}
-            >
-              <span className="text-sm text-muted">Managed by {signInNames}</span>
-            </Row>
-          )}
+              Change password
+            </button>
+            {pwNotice && <p className="mt-2 text-xs text-ok">{pwNotice}</p>}
+          </Row>
           <Row
             label="Delete account"
             hint={`Removes ${devices ? devices.length : "all"} host${devices?.length === 1 ? "" : "s"}, and every metric, log and crash snapshot they ever sent. There is no recovery — not from TraceBox, not from Supabase.`}
@@ -577,19 +434,6 @@ export default function SettingsPage() {
             </div>
           </form>
         </div>
-      )}
-
-      {unlinkTarget && (
-        <ConfirmDialog
-          title={`Unlink ${providerLabel(unlinkTarget.provider)}?`}
-          warning="You can link it again at any time."
-          confirmLabel="Unlink"
-          busy={identBusy !== null}
-          onConfirm={handleUnlink}
-          onCancel={() => setUnlinkTarget(null)}
-        >
-          You will no longer be able to sign in with this provider. Your hosts and data are not affected, and your other sign-in methods keep working.
-        </ConfirmDialog>
       )}
 
       {pwStep === "confirm" && (

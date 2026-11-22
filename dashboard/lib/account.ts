@@ -1,7 +1,7 @@
 /**
  * Hesap satırı — `accounts` tablosu (CLAUDE.md §5).
  *
- * Tablo yalnızca ÜÇ alan taşıyor: saklama süresi, plan ve açılış anı. Kullanıcı
+ * Tablo yalnızca İKİ alan taşıyor: saklama süresi ve açılış anı. Kullanıcı
  * kimliği ve e-posta burada değil, Supabase Auth'ta; `accounts.id` ile
  * `auth.users.id` aynı UUID olduğu için ikisini birleştirmeye gerek yok
  * (oturumdaki e-posta zaten kabukta duruyor).
@@ -21,14 +21,13 @@ import { supabase } from "./supabase";
 export type Account = {
   id: string;
   retention_days: number;
-  plan: string;
   created_at: string;
 };
 
 export async function fetchAccount(): Promise<Account | null> {
   const { data, error } = await supabase()
     .from("accounts")
-    .select("id, retention_days, plan, created_at")
+    .select("id, retention_days, created_at")
     .maybeSingle();
 
   if (error) throw error;
