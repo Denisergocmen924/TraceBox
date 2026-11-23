@@ -92,7 +92,6 @@ create table devices (
 
   -- --- statik eklentiler (config'de enabled_addons içindeyse dolu) -------------
   gpu_model           text,
-  external_ip         text,
 
   -- --- durum -----------------------------------------------------------------
   last_boot           timestamptz,

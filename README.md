@@ -97,7 +97,7 @@ Every endpoint the collector exposes, and who it accepts:
 A field that cannot be computed (the first sample, a counter reset after a reboot) is written as **`null`**, not `0`: "I could not measure it" is never confused with "it was zero".
 
 **Optional add-ons** — switched on one by one in `config.toml`, `null` while off:
-`temperature` · `swap` · `load_avg` · `gpu` · `external_ip` · `crash_processes`
+`temperature` · `swap` · `load_avg` · `gpu` · `crash_processes`
 
 ### Logs
 

@@ -2,9 +2,8 @@
  * Eklenti ölçülerinin grafikleri (agent `enabled_addons`, CLAUDE.md §4.3).
  *
  * Her eklenti kendi TÜRÜNE göre gösterilir: zaman serisi olanlar (sıcaklık,
- * swap, yük ortalaması, GPU) grafik olur; zaman serisi olmayanlar (`external_ip`
- * tek bir değer, `crash_processes` ayrı bir tablo) burada YOK — onlar künyede
- * ve çöküş işaretlerinde zaten gösteriliyor.
+ * swap, yük ortalaması, GPU) grafik olur; zaman serisi olmayan `crash_processes`
+ * (ayrı bir tablo) burada YOK — o çöküş işaretlerinde zaten gösteriliyor.
  *
  * Bir grafik YALNIZCA cihazın `enabled_addons` listesi o eklentiyi içeriyorsa
  * çıkar. Kapatılmış bir eklentinin eski verisi bu yüzden gizlenir; bilinçli

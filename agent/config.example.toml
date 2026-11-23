@@ -66,10 +66,6 @@ spool_max_size_mb = 200
 #   "swap"            swap usage              -> metrics.swap_used_mb
 #   "load_avg"        load average (Linux)    -> metrics.load_avg_1/5/15
 #   "gpu"             GPU usage + VRAM        -> metrics.gpu_usage_percent, gpu_vram_used_mb
-#   "external_ip"     external IP (static)    -> devices.external_ip
-#                     The agent does NOT send the value: the receiving side
-#                     (the collector) writes it from the connection's source
-#                     IP. The choice here only answers "should it be written".
 #   "crash_processes" the 5 heaviest processes at flush time -> crash_snapshots
 #
 # Example: enabled_addons = ["swap", "load_avg"]

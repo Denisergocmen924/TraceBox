@@ -5,14 +5,8 @@ Envanter, metriklerin aksine NADİREN değişir: işlemci modeli, çekirdek say�
 toplam RAM, disk, işletim sistemi sürümü. Bu yüzden ayrı bir uç noktaya gider
 (POST /inventory) ve devices satırının üzerine yazılır — zaman serisi değildir.
 
-STATİK EKLENTİLER — ikisi de "nadiren değişir" tanımına uyar ama farklı
-yerlerden gelir:
-  * gpu_model — makinede okunur, eklenti açıksa doldurulur (aşağıda).
-  * external_ip — agent GÖNDERMEZ. Cihazın kendi dış IP'sini bildirmesi,
-    cihazın kendi kimliği hakkında sunucuya bilgi vermesi demekti; agent
-    yanlış bir IP yazabilirdi. Değeri, isteği gerçekten alan tarafta
-    (collector, proxy başlığından) yazılır. Kullanıcının açık/kapalı tercihi
-    yine buradan gider: enabled_addons listesi payload'da taşınıyor.
+STATİK EKLENTİ — gpu_model "nadiren değişir" tanımına uyar: makinede okunur,
+eklenti açıksa doldurulur (aşağıda).
 """
 
 from __future__ import annotations
