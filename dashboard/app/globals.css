@@ -70,28 +70,7 @@
   --color-ram-soft: #e5f8ed;
   --color-disk: #f97316;
   --color-disk-soft: #fef1e5;
-  --color-net: #3b82f6;
-  --color-net-soft: #ecf2fe;
-  /*
-   * Ağ grafiğinde İKİ çizgi var (gelen / giden) ve giden trafik MAGENTA.
-   *
-   * Önce camgöbeği (#06b6d4) denendi: gerekçe "maviyle aynı soğuk aileden,
-   * ikisi birlikte ağ diye okunur ama tonu ayırt edilecek kadar uzak" idi.
-   * Gerçek grafikte tutmadı — mavi ile camgöbeği arasında yalnızca ~20°
-   * ton farkı var ve agent'ın trafiği testere dişi gibi dalgalandığı için
-   * çizgiler saniyede bir kesişiyor; kullanıcı hangisinin gelen hangisinin
-   * giden olduğunu ayırt edemedi.
-   *
-   * Magenta, paletin KULLANILMAYAN tek geniş ton bölgesi: CPU moru 250°,
-   * RAM yeşili 160°, disk turuncusu 25°, ağ mavisi 217°. 330° hiçbirine
-   * komşu değil ve maviden ~113° uzak — üst üste binen iki çizgi bile
-   * birbirinden ayrılıyor. "Ağ ailesi" fikri kaybedildi ama o fikir zaten
-   * bir grafiğin İÇİNDE değil, iki grafik YAN YANAYKEN işe yarıyordu;
-   * grafiğin başlığı ve efsanesi o işi zaten yapıyor.
-   */
-  --color-net-out: #d6248b;
-  --color-net-out-soft: #fdeaf4;
-  /* Eklenti ölçüleri. Ton bölgeleri mevcut beş rengin (250/160/25/217/330°)
+  /* Eklenti ölçüleri. Ton bölgeleri mevcut üç rengin (250/160/25°)
      komşusu olmayacak şekilde seçildi: sıcaklık kırmızı, swap camgöbeği,
      yük ortalaması sarı ailesi (üç çizgi), GPU deniz yeşili. */
   --color-temp: #e5484d;
@@ -148,10 +127,6 @@
   --color-ram-soft: #0c2c22;
   --color-disk: #fb923c;
   --color-disk-soft: #33200e;
-  --color-net: #60a5fa;
-  --color-net-soft: #10203c;
-  --color-net-out: #f472b6;
-  --color-net-out-soft: #3a1024;
   --color-temp: #f87171;
   --color-swap: #22d3ee;
   --color-load: #facc15;

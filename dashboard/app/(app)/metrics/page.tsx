@@ -8,9 +8,8 @@
  * yok. Burası inceleme yeri — tam çözünürlük (§9.7'nin ~1000 kovası),
  * sürükleyerek yakınlaştırma (§9.8) ve iki ayrı eksen.
  *
- * İKİ GRAFİK: donanım (CPU/RAM/Disk, ortak yüzde ekseni) ve AĞ (gelen/giden).
- * Ağın ayrı olması bir tercih değil zorunluluk — yüzdenin tavanı var, ağın yok;
- * aynı eksene konsa biri diğerini ezerdi (lib/metrics.ts → networkTracks).
+ * Donanım grafiği (CPU/RAM/Disk, ortak yüzde ekseni) ve cihazın açık
+ * eklentilerinin grafikleri.
  *
  * Makine başına bir kart. Üst çubuktaki host seçicisi tek makineye kısıldığında
  * yalnızca o kalıyor, yani seçici burada da tüm sayfayı daraltıyor (§9.1'in
@@ -62,7 +61,7 @@ export default function MetricsPage() {
     <div className="mx-auto max-w-[1248px]">
       <PageHeader
         title="Metrics"
-        description="Full-resolution CPU, memory, disk and network history."
+        description="Full-resolution CPU, memory and disk history."
         scope={scopeName}
       >
         {devices && (

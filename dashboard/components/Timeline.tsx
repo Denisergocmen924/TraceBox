@@ -1,19 +1,16 @@
 /**
  * Zaman çizelgesi paneli (CLAUDE.md §9.5–§9.8).
  *
- * İKİ grafik çiziyor, ikisi de aynı zaman ekseninde:
+ * Aynı zaman ekseninde çizim yapıyor:
  *   1. Donanım — CPU / RAM / Disk, hepsi ORTAK yüzde ekseninde üst üste.
- *      Önceki hâl üçünü alt alta ayrı grafiklere koyuyordu; üst üste bindirmek
- *      "CPU fırladığında RAM ne yapıyordu?" sorusunu daha iyi cevaplıyor —
- *      üç değer aynı dikey hizada, göz tek bakışta karşılaştırıyor.
- *   2. Ağ — gelen / giden. AYRI, çünkü ağın yüzde tavanı yok: aynı eksene
- *      konsaydı ya yüzdelerin yanında dümdüz sıfır çizgisi olurdu ya da onları
- *      ezerdi. Gerekçenin uzunu lib/metrics.ts → networkTracks.
+ *      Üç değer aynı dikey hizada durduğundan "CPU fırladığında RAM ne
+ *      yapıyordu?" sorusu tek bakışta okunuyor.
+ *   2. Eklenti panelleri — cihazın açık eklentilerine göre (sıcaklık, swap,
+ *      yük ortalaması, GPU), her biri kendi biriminde ayrı bir bölme.
  *
- * İki grafik AYNI bileşeni (MetricChart) kullanıyor, aynı `hoverTime`'ı ve aynı
- * sürükleme durumunu paylaşıyor: birinin üstünde gezinen imleç ötekinde de
- * aynı anı işaretliyor, birinde yapılan seçim ikisini birden yakınlaştırıyor.
- * Ayrı durumlar olsaydı kullanıcı iki grafiği gözüyle hizalamak zorunda kalırdı.
+ * Tüm grafikler AYNI bileşeni (MetricChart) kullanıyor, aynı `hoverTime`'ı ve
+ * aynı sürükleme durumunu paylaşıyor: birinin üstünde gezinen imleç ötekilerde
+ * de aynı anı işaretliyor, birinde yapılan seçim hepsini birden yakınlaştırıyor.
  *
  * Tüm ölçüler TEK istekle geliyor: metrics_buckets zaten hepsini birlikte
  * döndürüyor. Ayrı ayrı çekmek aynı satırları iki kez taratır ve çizgiler
@@ -62,14 +59,11 @@ import {
   BUCKET_COUNT,
   bucketWidthMs,
   fetchBuckets,
-  formatBitrate,
   formatDuration,
   formatPercent,
   hardwareTracks,
   nearestIndex,
-  networkTracks,
   plotEndMs,
-  tracksCeiling,
   type MetricBucket,
   type Track,
 } from "@/lib/metrics";
@@ -337,20 +331,10 @@ export function Timeline({
     [buckets, ramTotalMb, diskTotalMb, widthMs],
   );
 
-  const network = useMemo(
-    () => networkTracks(buckets, widthMs),
-    [buckets, widthMs],
-  );
-
   const addonKey = enabledAddons.join(",");
   const addons = useMemo(
     () => addonPanels(buckets, addonKey ? addonKey.split(",") : [], widthMs),
     [buckets, addonKey, widthMs],
-  );
-
-  const netCeiling = useMemo(
-    () => tracksCeiling(network.tracks),
-    [network.tracks],
   );
 
   const hoverIndex = useMemo(
@@ -533,31 +517,6 @@ export function Timeline({
             formatAxis={(v) => formatPercent(v)}
             note={hardwareNote}
           />
-
-          {/* Ağ grafiği ayrı bir bölme: başlığı olmasaydı iki grafik tek bir
-              şeymiş gibi okunur, ikinci eksenin farklı birimde olduğu gözden
-              kaçardı. */}
-          <div className="border-t border-line">
-            <ChartHeader
-              title="Network"
-              subtitle="traffic in and out of this host"
-              tracks={network.tracks}
-              hovered={hovered}
-            />
-            {network.tracks.length === 0 ? (
-              <p className="px-5 py-10 text-center text-sm text-muted">
-                No network samples in this range.
-              </p>
-            ) : (
-              <MetricChart
-                {...shared}
-                tracks={network.tracks}
-                ceiling={netCeiling}
-                formatAxis={(v) => formatBitrate(v, network.scale)}
-                height={180}
-              />
-            )}
-          </div>
 
           {/* Eklenti grafikleri: her biri ayrı bölme, çünkü her birinin
               kendi birimi ve ekseni var (°C, MB, yük, %). Hepsi aynı zaman

@@ -67,8 +67,6 @@ class MetricIn(_Payload):
     cpu_percent: float | None = None
     ram_used_mb: int | None = None
     disk_percent: float | None = None
-    net_sent_mb: float | None = None
-    net_recv_mb: float | None = None
     temperature_c: float | None = None
     swap_used_mb: int | None = None
     load_avg_1: float | None = None

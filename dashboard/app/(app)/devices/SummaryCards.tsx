@@ -1,8 +1,7 @@
 /**
- * Özet kartları — referans 2'nin üst şeridi (CPU · Bellek · Disk · Ağ).
+ * Özet kartları — üst şerit (CPU · Bellek · Disk).
  *
- * Referanstaki dört kart birebir alındı; içeriği uydurulmadı. Her sayı,
- * hesabın cihazlarının EN SON ölçümlerinin ortalaması.
+ * Her sayı, hesabın cihazlarının EN SON ölçümlerinin ortalaması.
  *
  * Ortalamaya YALNIZCA konuşan cihazlar giriyor. Sebep: çevrimdışı bir cihazın
  * son metriği saatler önceki bir andan kalma olabilir. Onu ortalamaya katmak,
@@ -21,7 +20,6 @@ import {
 import {
   FLUSH_THRESHOLD,
   SERIES,
-  formatBitratePair,
   formatPercent,
 } from "@/lib/metrics";
 
@@ -45,8 +43,8 @@ function Card({
   label: string;
   value: string;
   hint: string;
-  /** 0–100; yoksa çubuk çizilmez (ağın yüzdesi olmaz). */
-  bar: number | null;
+  /** 0–100 yüzde; çubuğun doluluğu. */
+  bar: number;
   barTone: string;
 }) {
   return (
@@ -58,14 +56,12 @@ function Card({
       <p className="mt-3 font-mono text-[26px] leading-none font-medium tracking-tight tabular-nums">
         {value}
       </p>
-      {bar != null && (
-        <div className="mt-3 h-1 overflow-hidden rounded-full bg-panel-2">
-          <div
-            className={`h-full rounded-full transition-[width] duration-700 ease-out ${barTone}`}
-            style={{ width: `${Math.min(100, Math.max(0, bar))}%` }}
-          />
-        </div>
-      )}
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-panel-2">
+        <div
+          className={`h-full rounded-full transition-[width] duration-700 ease-out ${barTone}`}
+          style={{ width: `${Math.min(100, Math.max(0, bar))}%` }}
+        />
+      </div>
       <p className="mt-2 text-xs text-faint">{hint}</p>
     </div>
   );
@@ -91,17 +87,8 @@ export function SummaryCards({
       ? "No reporting hosts"
       : `Avg across ${metrics.length} hosts`;
 
-  const netSent = mean(metrics.map((m) => m.net_sent_mb));
-  const netRecv = mean(metrics.map((m) => m.net_recv_mb));
-  // Birim büyüklüğe göre seçiliyor (Mbps / Kbps), o yüzden sayıyla birlikte
-  // hesaplanıp alt satıra yazılıyor — bkz. formatBitratePair.
-  const net =
-    netSent == null || netRecv == null
-      ? null
-      : formatBitratePair(netSent, netRecv);
-
   return (
-    <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card xl:grid-cols-4">
+    <div className="mb-6 grid grid-cols-1 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card sm:grid-cols-3">
       {SERIES.map((series) => {
         const average = mean(
           live.map((d) =>
@@ -124,17 +111,6 @@ export function SummaryCards({
           />
         );
       })}
-
-      <Card
-        chip="bg-net"
-        label="Network"
-        // Ağın tavanı yok: %90 dolu bir ağ kartı diye bir şey ölçmüyoruz.
-        // Bu yüzden çubuk da yok, ok işaretleriyle yön veriliyor.
-        value={net == null ? "—" : `↑${net.sent} ↓${net.recv}`}
-        hint={net == null ? hint : `${hint} · ${net.unit}`}
-        bar={null}
-        barTone=""
-      />
     </div>
   );
 }

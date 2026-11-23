@@ -9,7 +9,7 @@
  * çıkar. Kapatılmış bir eklentinin eski verisi bu yüzden gizlenir; bilinçli
  * bir tercih (bkz. md/memory/decisions.md → "Eklenti grafikleri").
  *
- * Çizim donanım ve ağ grafikleriyle AYNI yoldan geçer: iz (Track) üretilir,
+ * Çizim donanım grafikleriyle AYNI yoldan geçer: iz (Track) üretilir,
  * MetricChart çizer. Burada ikinci bir çizim mantığı yok.
  */
 import {
@@ -114,7 +114,7 @@ const PANELS: PanelDef[] = [
           bar: "bg-load-5",
         },
         // Üç çizgi birbirine çok yakın seyredebilir; kesik çizgi alttakini
-        // gösteriyor (ağ grafiğindeki gelen/giden ile aynı gerekçe).
+        // gösteriyor.
         dashed: true,
       },
       {

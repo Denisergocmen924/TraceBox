@@ -65,7 +65,7 @@ export function MetricChart({
   /** İmleç okuması kovanın HAM değerlerini gösteriyor; izler ölçeklenmiş. */
   buckets: MetricBucket[];
   ceiling: number;
-  /** Y ekseni etiketi — yüzdede "75%", ağda "1.2 Mbps". */
+  /** Y ekseni etiketi — yüzdede "75%", sıcaklıkta "62 °C". */
   formatAxis: (value: number) => string;
   height?: number;
   /** Eksik bir izin sebebini açıklayan satır (varsa grafiğin altında). */
@@ -346,7 +346,7 @@ export function MetricChart({
 
 /**
  * Gösterge: seri adı + renk/çizgi stili; imleç varken aynı yerde DEĞERİ de
- * yazar. Değer izin KENDİ biriminde (RAM'de GB, ağda Mbps): eksen zaten ölçeği
+ * yazar. Değer izin KENDİ biriminde (RAM'de GB, sıcaklıkta °C): eksen zaten ölçeği
  * söylüyor. Dar genişlikte satır kırılır, başlığın üstüne binmez.
  */
 export function ChartLegend({
