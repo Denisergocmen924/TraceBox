@@ -38,8 +38,8 @@ export type DeviceRow = {
   disk_total_mb: number | null;
   agent_version: string | null;
   /*
-   * Açılış anı. Listede de okunuyor: Inventory sayfası ve cihaz detayındaki
-   * "Booted" satırı bu alandan türüyor.
+   * Açılış anı. Listede de okunuyor; cihaz detayındaki "Booted" satırı bu
+   * alandan türüyor.
    */
   last_boot: string | null;
   logging_enabled: boolean;
@@ -270,62 +270,4 @@ export async function fetchDevice(id: string): Promise<DeviceDetail | null> {
 export async function forceRemoveDevice(id: string): Promise<void> {
   const { error } = await supabase().from("devices").delete().eq("id", id);
   if (error) throw error;
-}
-
-/* --- Envanter (Inventory sayfası) ---------------------------------------- */
-
-/**
- * Cihazın DEĞİŞMEYEN künyesi — kabuğun 10 saniyede bir çektiği listede yok.
- *
- * `LIST_COLUMNS` bilerek dar: o sorgu her 10 saniyede bir koşuyor ve cpu_model,
- * kernel_version, gpu_model gibi ayda bir değişen alanları her turda indirmek
- * saf israf olurdu. Envanter sayfası ise TAM olarak o alanlar için var, o
- * yüzden kendi sorgusunu bir kez açıyor.
- */
-export type InventoryDevice = Device & {
-  cpu_model: string | null;
-  cpu_cores_physical: number | null;
-  kernel_version: string | null;
-  gpu_model: string | null;
-};
-
-/**
- * Hesabın tüm cihazlarının envanteri, tek sorguda.
- *
- * Cihaz başına `fetchDevice` çağırmak N+1 olurdu; burada aynı DETAIL_COLUMNS
- * kümesi tek seferde, `id` filtresi olmadan çekiliyor — RLS zaten hesabın
- * dışına çıkmayı engelliyor.
- */
-export async function fetchInventory(): Promise<InventoryDevice[]> {
-  const client = supabase();
-
-  const devicesQuery = client
-    .from("devices")
-    .select(DETAIL_COLUMNS)
-    .order("measured_at", { referencedTable: "metrics", ascending: false })
-    .limit(1, { referencedTable: "metrics" })
-    .order("device_name");
-
-  // Durum rozeti için: silme bekleyen cihaz "Deleting" görünmeli (§9.3'ün
-  // dört hâli). Rozeti atlayıp yalnızca künyeyi göstermek, envanterde artık
-  // var olmayacak bir makineyi hâlâ envanterdeymiş gibi listelemek olurdu.
-  const commandsQuery = client
-    .from("commands")
-    .select("device_id")
-    .eq("type", "delete")
-    .eq("status", "pending");
-
-  const [devices, commands] = await Promise.all([devicesQuery, commandsQuery]);
-
-  if (devices.error) throw devices.error;
-  if (commands.error) throw commands.error;
-
-  const pending = new Set((commands.data ?? []).map((c) => c.device_id));
-
-  return (devices.data as unknown as (DeviceRow &
-    Omit<InventoryDevice, keyof Device>)[]).map(({ metrics, ...device }) => ({
-    ...device,
-    latest: metrics[0] ?? null,
-    deletePending: pending.has(device.id),
-  }));
 }

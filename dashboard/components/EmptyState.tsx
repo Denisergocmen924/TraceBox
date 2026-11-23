@@ -1,11 +1,8 @@
 /**
  * "Gösterecek bir şey yok" kutusu — maskotlu.
  *
- * Hosts ve Inventory sayfalarının boş hâlini tek bileşen çizer: maskot
- * görseli, isteğe bağlı başlık ve sayfaya özgü açıklama.
- *
- * Poz sayfanın konusunu taşır (`mascot`): aranan şey yoksa `shrug` omuz
- * silker.
+ * Hosts sayfasının boş hâlini çizer: maskot görseli, isteğe bağlı başlık
+ * ve sayfaya özgü açıklama.
  *
  * `children` sayfaya özgü cümle (bağlantısıyla birlikte); başlık ve açıklama
  * isteğe bağlı, ikisi de yoksa yalnızca cümle gelir.
@@ -14,10 +11,7 @@ import Image from "next/image";
 
 /** Dosya adı `public/mascot-<poz>.png`. Yeni poz = bir dosya + bir satır. */
 export type Mascot =
-  | "hosts" // el sallıyor, fişi uzatıyor: "bir makine bağla"
-  | "inventory" // checklist
-  | "shrug" // omuz silkiyor: aranan şey yok
-  | "lost"; // baş kaşıyor, soru işaretleri (404)
+  "hosts"; // el sallıyor, fişi uzatıyor: "bir makine bağla"
 
 /** Görsellerin doğal oranı 3:2 ; `h-auto` kalanı çözer. */
 export function EmptyState({
