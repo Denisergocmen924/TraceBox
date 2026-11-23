@@ -18,7 +18,7 @@
  * gösterirken log listesi hâlâ sayfa açıldığı andaki pencerede kalırdı ve
  * yakınlaştırma o kaymayı hesaba katmadan kırpardı. Kenar burada olduğu için
  * sayfadaki HER panel aynı "şu an"a bakıyor ve tek bir abonelik yetiyor —
- * grafik başına bir kanal açmak, Metrics sayfasında cihaz sayısı kadar
+ * grafik başına bir kanal açmak, ekrandaki grafik sayısı kadar
  * WebSocket demekti.
  */
 "use client";

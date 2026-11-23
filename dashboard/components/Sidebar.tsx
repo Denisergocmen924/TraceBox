@@ -21,9 +21,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  IconChart,
   IconClose,
-  IconFileText,
   IconHome,
   IconInventory,
   IconServer,
@@ -50,18 +48,6 @@ const NAV: NavItem[] = [
     icon: IconServer,
     href: "/devices",
     match: (p) => p.startsWith("/devices"),
-  },
-  {
-    label: "Metrics",
-    icon: IconChart,
-    href: "/metrics",
-    match: (p) => p === "/metrics",
-  },
-  {
-    label: "Logs",
-    icon: IconFileText,
-    href: "/logs",
-    match: (p) => p === "/logs",
   },
   {
     label: "Inventory",

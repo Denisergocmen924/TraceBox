@@ -1,14 +1,12 @@
 /**
- * Telefon alt sekme çubuğu — başparmakla ulaşılan beş hedef. Geniş ekranda
- * gizli (kenar çubuğu var). Yedi menü öğesinin kalanı "More" ile çekmecede.
+ * Telefon alt sekme çubuğu — başparmakla ulaşılan hedefler. Geniş ekranda
+ * gizli (kenar çubuğu var). Menü öğelerinin kalanı "More" ile çekmecede.
  */
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  IconChart,
-  IconFileText,
   IconHome,
   IconServer,
   IconSettings,
@@ -17,8 +15,6 @@ import {
 const TABS = [
   { label: "Overview", href: "/overview", icon: IconHome, match: (p: string) => p === "/overview" },
   { label: "Hosts", href: "/devices", icon: IconServer, match: (p: string) => p.startsWith("/devices") },
-  { label: "Metrics", href: "/metrics", icon: IconChart, match: (p: string) => p === "/metrics" },
-  { label: "Logs", href: "/logs", icon: IconFileText, match: (p: string) => p === "/logs" },
 ];
 
 export function TabBar({ onMore }: { onMore: () => void }) {

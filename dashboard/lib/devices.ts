@@ -46,8 +46,8 @@ export type DeviceRow = {
   logging_enabled: boolean;
   last_seen: string | null;
   /**
-   * Açık eklentiler. Listede de gerekiyor: Metrics sayfası her cihaz için
-   * zaman çizelgesi çiziyor ve hangi eklenti grafiklerinin çıkacağı buna bağlı.
+   * Açık eklentiler. Zaman çizelgesinde hangi eklenti grafiklerinin
+   * çıkacağı buna bağlı.
    * jsonb dizisi birkaç bayt; 10 saniyelik tur için yük sayılmaz.
    */
   enabled_addons: string[];

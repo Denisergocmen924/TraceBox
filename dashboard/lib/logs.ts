@@ -20,10 +20,8 @@ export type LogLevel = "info" | "warning" | "error" | "critical";
 export type LogRow = {
   id: string;
   /**
-   * Satırın hangi makineden geldiği. Cihaz detayında gereksiz (zaten tek bir
-   * makineye bakılıyor) ama hesap genelindeki Logs sayfasında satırın en
-   * önemli sütunu: kaynağı yazmayan bir akış, birbirine karışmış iki makinenin
-   * loglarını tek bir makinenin logu gibi gösterirdi.
+   * Satırın hangi makineden geldiği (`cihaz_id` süzgeci verilmeden hesap
+   * genelinde okunduğunda satırların makinesini ayırt eder).
    */
   device_id: string;
   measured_at: string;
@@ -135,7 +133,7 @@ export const LOG_PAGE_SIZE = 200;
 
 export async function fetchLogPage(params: {
   /**
-   * `null` = hesabın TÜM cihazları (Logs sayfası). Filtre yazılmadığında
+   * `null` = hesabın TÜM cihazları. Filtre yazılmadığında
    * RLS'in kendi `account_id = auth.uid()` kuralı devrede kalıyor, yani
    * kapsam yine hesapla sınırlı — sorgu güvenliği kaybetmiyor, yalnızca
    * daraltmayı bırakıyor.
