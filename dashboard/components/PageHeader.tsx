@@ -1,5 +1,5 @@
 /**
- * Sayfa başlığı — Overview'ın başlığından çıkarıldı, altı sayfa paylaşıyor.
+ * Sayfa başlığı — sayfalar ortak başlık düzenini paylaşıyor.
  *
  * Ortak bir bileşen olmasının sebebi hizalama: 28px başlık, altında 14px açıklama
  * ve sağda isteğe bağlı bir sayaç şeridi. Her sayfa kendi başlığını yazsaydı
@@ -47,7 +47,7 @@ export function PageHeader({
   );
 }
 
-/** Başlığın sağındaki sayaç — Overview'daki "5 Hosts · 4 Online · 1 Offline". */
+/** Başlığın sağındaki sayaç — örn. "5 Hosts · 4 Online · 1 Offline". */
 export function Tally({
   value,
   label,

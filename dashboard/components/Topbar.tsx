@@ -8,8 +8,7 @@
  * kendi tema seçicisini taşıyor (bkz. settings/page.tsx), üst çubukta aynı
  * kontrolün ikinci bir kopyasına gerek yok.
  *
- * İki seçici de GERÇEK: host seçimi Overview'ın tamamını ve cihaz listesini
- * daraltıyor, zaman seçimi §9.8'in "zaman aralığı TEKTİR" kuralını taşıyor —
+ * İki seçici de GERÇEK: host seçimi cihaz listesini daraltıyor, zaman seçimi §9.8'in "zaman aralığı TEKTİR" kuralını taşıyor —
  * aynı seçim hem grafiği hem log listesini kapsıyor.
  */
 "use client";

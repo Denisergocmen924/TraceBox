@@ -104,7 +104,7 @@ export function AuthPanel({ recovery }: { recovery: boolean }) {
         password,
         options: {
           // Doğrulama bağlantısı buraya döner; oturum açılınca kök adres
-          // kullanıcıyı Overview'a gönderir.
+          // kullanıcıyı cihaz listesine gönderir.
           emailRedirectTo: `${window.location.origin}/`,
         },
       });

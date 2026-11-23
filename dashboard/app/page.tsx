@@ -1,5 +1,5 @@
 /**
- * Kök adres bir ekran değil, bir yol ayrımı: oturum varsa Overview'a,
+ * Kök adres bir ekran değil, bir yol ayrımı: oturum varsa cihaz listesine,
  * yoksa giriş ekranına gönderir. Kendi başına hiçbir şey göstermez.
  */
 "use client";
@@ -14,7 +14,7 @@ export default function Home() {
 
   useEffect(() => {
     if (status === "loading") return; // "bilmiyorum" hâlinde yönlendirme YOK
-    router.replace(status === "signedIn" ? "/overview" : "/login");
+    router.replace(status === "signedIn" ? "/devices" : "/login");
   }, [status, router]);
 
   return null;

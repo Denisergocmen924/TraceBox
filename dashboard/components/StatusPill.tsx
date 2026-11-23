@@ -26,12 +26,6 @@ const TONE: Record<DeviceStatus, { dot: string; chip: string }> = {
   },
 };
 
-export function StatusDot({ status }: { status: DeviceStatus }) {
-  return (
-    <span className={`size-2 shrink-0 rounded-full ${TONE[status].dot}`} />
-  );
-}
-
 export function StatusPill({ status }: { status: DeviceStatus }) {
   return (
     <span

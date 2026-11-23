@@ -4,7 +4,7 @@
  * `(app)` kabuğunun (kenar çubuğu, oturum kapısı) DIŞINDA durur: bilinmeyen bir
  * adrese gelen kişinin oturumu olup olmadığını bilmiyoruz, kabuk giriş ister
  * ve 404 yerine giriş ekranı gösterirdi. Bu yüzden yalnızca marka + iki çıkış.
- * `/` zaten oturuma göre Overview'a ya da girişe yönlendiriyor.
+ * `/` zaten oturuma göre cihaz listesine ya da girişe yönlendiriyor.
  */
 import Image from "next/image";
 import Link from "next/link";

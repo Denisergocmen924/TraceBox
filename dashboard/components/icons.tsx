@@ -60,16 +60,6 @@ export function IconMemory(p: IconProps) {
   );
 }
 
-export function IconDisk(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <rect x="2.5" y="5" width="19" height="14" rx="2" />
-      <path d="M2.5 13h19" />
-      <path d="M6 16.5h.01M9.5 16.5h.01" />
-    </Svg>
-  );
-}
-
 export function IconActivity(p: IconProps) {
   return (
     <Svg {...p}>
@@ -225,15 +215,6 @@ export function IconChevronDown(p: IconProps) {
   );
 }
 
-/** Bulut — sidebar altındaki toplayıcı rozeti. */
-export function IconCloud(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.2 11.2 3.5 3.5 0 0 0 7 19Z" />
-    </Svg>
-  );
-}
-
 /** Geri ok — yakınlaştırmada bir adım geri (§9.8). */
 export function IconArrowLeft(p: IconProps) {
   return (
@@ -291,26 +272,6 @@ export function IconLockOpen(p: IconProps) {
  * çizgi kalınlığı ve yuvarlaklık zaten bu ailenin değerleri; simge başına
  * ayrı bir stil yok.
  */
-
-/** Overview — referansın ilk menü öğesi. */
-export function IconHome(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
-      <path d="M9.5 20v-5.5h5V20" />
-    </Svg>
-  );
-}
-
-/** Metrics — eksen + çubuklar. */
-export function IconChart(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <path d="M4 4v16h16" />
-      <path d="M8.5 16v-4M12.5 16V8M16.5 16v-6" />
-    </Svg>
-  );
-}
 
 /** Inventory — bölmeli kutu. */
 export function IconInventory(p: IconProps) {
