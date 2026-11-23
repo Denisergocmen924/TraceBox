@@ -9,17 +9,6 @@ from agent.core.metrics import MetricsCollector
 CONFIG = Config(collector_url="https://collector.test", device_key="tbx_live_test")
 
 
-def test_first_sample_has_no_network_rate():
-    """İlk ölçümde karşılaştırılacak önceki sayaç yoktur.
-
-    Hız hesaplanamadığında 0.0 değil None yazılır: 0.0 "trafik yoktu"
-    demek olurdu, oysa burada ölçüm hiç yapılamamıştır.
-    """
-    sample = MetricsCollector().collect(CONFIG).sample
-    assert sample.net_sent_mb is None
-    assert sample.net_recv_mb is None
-
-
 def test_reading_carries_the_ram_percentage_beside_the_sample():
     """Yüzde ölçümün YANINDA taşınır, içinde değil.
 

@@ -149,11 +149,6 @@ create table metrics (
   ram_used_mb       integer,
   disk_percent      real,
 
-  -- Ağ değerleri kümülatif sayaç değil rate'tir: agent iki ölçüm arasındaki
-  -- farkı geçen süreye böler ve sonucu buraya yazar.
-  net_sent_mb       real,
-  net_recv_mb       real,
-
   -- --- eklentiler (config'de kapalıysa null kalır) ----------------------------
   temperature_c     real,
   swap_used_mb      integer,
@@ -303,11 +298,6 @@ create index commands_device_status_idx on commands (device_id, status);
 -- Yeni indeks gerekmez: sorgu yukarıdaki (device_id, measured_at) indeksi
 -- üzerinden yürür.
 --
--- Ağ sütunlarının ortalaması anlamlıdır çünkü net_sent_mb / net_recv_mb agent
--- tarafında ORAN olarak hesaplanır (§4.2) — saniyedeki MB, kümülatif sayaç
--- değil. Kümülatif olsalardı bir kovanın ortalaması hiçbir şey ifade etmezdi.
--- Mbit'e çevirme arayüzde yapılır (x8); veritabanı kolonun kendi birimini korur.
---
 -- Eklenti sütunları (sıcaklık, swap, load_avg, GPU) da aynı üçlüyü döndürür. Eklenti
 -- kapalıyken sütun null'dır ve min/max/avg null döner — "ölçülmedi", sıfır değil.
 create or replace function public.metrics_buckets(
@@ -328,12 +318,6 @@ returns table (
   disk_min     real,
   disk_max     real,
   disk_avg     real,
-  net_sent_min real,
-  net_sent_max real,
-  net_sent_avg real,
-  net_recv_min real,
-  net_recv_max real,
-  net_recv_avg real,
   temp_min            real,
   temp_max            real,
   temp_avg            real,
@@ -392,12 +376,6 @@ as $$
     min(m.disk_percent)           as disk_min,
     max(m.disk_percent)           as disk_max,
     avg(m.disk_percent)::real     as disk_avg,
-    min(m.net_sent_mb)            as net_sent_min,
-    max(m.net_sent_mb)            as net_sent_max,
-    avg(m.net_sent_mb)::real      as net_sent_avg,
-    min(m.net_recv_mb)            as net_recv_min,
-    max(m.net_recv_mb)            as net_recv_max,
-    avg(m.net_recv_mb)::real      as net_recv_avg,
     min(m.temperature_c)            as temp_min,
     max(m.temperature_c)            as temp_max,
     avg(m.temperature_c)::real      as temp_avg,

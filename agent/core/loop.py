@@ -85,9 +85,7 @@ def _format_sample(sample: MetricSample) -> str:
     return (
         f"cpu={value(sample.cpu_percent, '%')} "
         f"ram={sample.ram_used_mb}MB "
-        f"disk={value(sample.disk_percent, '%')} "
-        f"net↑{value(sample.net_sent_mb, 'MB/s', 3)} "
-        f"net↓{value(sample.net_recv_mb, 'MB/s', 3)}"
+        f"disk={value(sample.disk_percent, '%')}"
     )
 
 

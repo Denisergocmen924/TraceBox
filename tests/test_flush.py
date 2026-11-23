@@ -50,8 +50,6 @@ def make_reading(
         cpu_percent=cpu,
         ram_used_mb=ram_used_mb,
         disk_percent=disk,
-        net_sent_mb=0.0,
-        net_recv_mb=0.0,
     )
     return MetricReading(sample=sample, ram_percent=ram_percent)
 

@@ -225,17 +225,6 @@ export function IconMoon(p: IconProps) {
   );
 }
 
-/** Ağ giriş/çıkış — özet kartlarındaki dördüncü ölçü. */
-export function IconNetwork(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <path d="M7 8 3 12l4 4" />
-      <path d="m17 8 4 4-4 4" />
-      <path d="M14 5 10 19" />
-    </Svg>
-  );
-}
-
 /** Aşağı ok — açılır listelerin sağındaki işaret. */
 export function IconChevronDown(p: IconProps) {
   return (

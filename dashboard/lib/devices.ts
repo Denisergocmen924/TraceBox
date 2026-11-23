@@ -25,13 +25,6 @@ export type LatestMetric = {
   cpu_percent: number | null;
   ram_used_mb: number | null;
   disk_percent: number | null;
-  /*
-   * Ağ, agent tarafında ORAN olarak hesaplanıyor (§4.2): saniyedeki MB, kümüle
-   * toplam değil. Kart üstündeki üç çubukta yok — orada yüzde okunuyor ve ağın
-   * yüzdesi olmaz (tavanı yok). Yalnızca özet kartlarında görünüyor.
-   */
-  net_sent_mb: number | null;
-  net_recv_mb: number | null;
 };
 
 export type DeviceRow = {
@@ -140,8 +133,7 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
  */
 const LIST_COLUMNS = `id, device_name, os_name, os_version, arch, cpu_cores_logical,
    ram_total_mb, disk_total_mb, agent_version, last_boot, logging_enabled, last_seen, enabled_addons,
-   metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent,
-             net_sent_mb, net_recv_mb )`;
+   metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent )`;
 
 const DETAIL_COLUMNS = `${LIST_COLUMNS}, cpu_model, cpu_cores_physical,
    kernel_version, gpu_model`;

@@ -1,10 +1,9 @@
 """
-Ölçüm toplama — psutil ile CPU, RAM, disk ve ağ.
+Ölçüm toplama — psutil ile CPU, RAM ve disk.
 
-Çekirdek metrikler HER ZAMAN toplanır: cpu_percent, ram_used_mb, disk_percent,
-net_sent_mb, net_recv_mb. Eklenti alanları (sıcaklık, swap, load average, GPU)
-yalnızca config'in enabled_addons listesinde adı geçiyorsa okunur; kapalıyken
-alan null kalır.
+Çekirdek metrikler HER ZAMAN toplanır: cpu_percent, ram_used_mb, disk_percent.
+Eklenti alanları (sıcaklık, swap, load average, GPU) yalnızca config'in
+enabled_addons listesinde adı geçiyorsa okunur; kapalıyken alan null kalır.
 
 Eklentilerin varsayılan olarak KAPALI olmasının sebebi ölçüm maliyeti değil,
 anlam maliyetidir: her makinede olmayan bir sütun (sıcaklık sensörü,
@@ -13,7 +12,6 @@ NVIDIA GPU, Linux'a özgü load average) açıkça istenmeden doldurulmaz.
 
 from __future__ import annotations
 
-import time
 import uuid
 from dataclasses import dataclass
 
@@ -31,7 +29,7 @@ from agent.core.gpu import GpuReader
 
 # Bayt -> MB çevrimi ikili tabanda (MiB). Şema sütunları "mb" adını taşır ama
 # RAM ve disk değerleri işletim sisteminin raporladığı ikili birimdir; tek bir
-# çevrim sabiti kullanmak RAM ve ağ sayılarının aynı ölçekte kalmasını sağlar.
+# çevrim sabiti kullanmak RAM ve swap sayılarının aynı ölçekte kalmasını sağlar.
 BYTES_PER_MB = 1024 * 1024
 
 # Sıcaklık okunurken denenecek sensör adları, sırayla. İlk bulunan kullanılır.
@@ -63,8 +61,6 @@ class MetricSample:
     cpu_percent: float | None
     ram_used_mb: int
     disk_percent: float
-    net_sent_mb: float | None
-    net_recv_mb: float | None
 
     # --- eklentiler: kapalıyken None, yani sütun null kalır ---
     # Varsayılan değerleri var çünkü çekirdek alanların aksine bunların
@@ -98,19 +94,15 @@ class MetricReading:
 
 
 class MetricsCollector:
-    """Ardışık ölçümler arasında fark gerektiren alanların durumunu tutar.
+    """Ardışık ölçümler arasında fark gerektiren alanın durumunu tutar.
 
-    CPU yüzdesi ve ağ hızı MUTLAK değerler değildir; ikisi de "önceki ölçümden
-    bu yana" hesaplanır. Bu yüzden toplayıcı bir nesnedir: önceki sayaçları
-    bellekte taşır. Sayaçlar bilerek state.json'a yazılmaz — agent saatlerce
-    kapalı kaldıysa aradaki farkı "hız" diye kaydetmek anlamsız bir ortalama
-    üretirdi.
+    CPU yüzdesi MUTLAK bir değer değildir; "önceki ölçümden bu yana"
+    hesaplanır. Bu yüzden toplayıcı bir nesnedir: psutil'in taban değeri alındı
+    mı bilgisini bellekte taşır. Bu bilgi bilerek state.json'a yazılmaz.
     """
 
     def __init__(self, disk_mount_point: str = DISK_MOUNT_POINT) -> None:
         self._disk_mount_point = disk_mount_point
-        # (bytes_sent, bytes_recv, monotonic zaman) — ilk ölçümde None.
-        self._previous_net: tuple[int, int, float] | None = None
         # psutil.cpu_percent'in taban değeri alındı mı.
         self._cpu_primed = False
         # GPU eklentisi kapalıyken hiç kullanılmaz; nesne durum tuttuğu için
@@ -124,17 +116,15 @@ class MetricsCollector:
         eklentiyi açtığında değişiklik servis yeniden başlatılmadan geçerli
         olsun diye (döngü her tick'te dosyayı yeniden okuyor).
 
-        Fark gerektiren alanlar (cpu_percent, net_*) hesaplanamadığında None
-        döner; çağıran bunu doğrudan null olarak kaydeder. 0.0 yazmak "yük
-        yoktu" / "trafik yoktu" anlamına gelirdi ve ölçülemeyen bir anı sıfırla
-        karıştırırdı.
+        Fark gerektiren alan (cpu_percent) hesaplanamadığında None döner;
+        çağıran bunu doğrudan null olarak kaydeder. 0.0 yazmak "yük yoktu"
+        anlamına gelirdi ve ölçülemeyen bir anı sıfırla karıştırırdı.
 
         Dönen MetricReading, kaydedilecek örneğin yanında RAM yüzdesini de
         taşır; ikisi de AYNI psutil okumasından çıkar.
         """
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage(self._disk_mount_point)
-        net_sent_mb, net_recv_mb = self._network_rates()
 
         addons = config.enabled_addons
         gpu_usage_percent, gpu_vram_used_mb = (
@@ -152,8 +142,6 @@ class MetricsCollector:
             # ölçü budur.
             ram_used_mb=(memory.total - memory.available) // BYTES_PER_MB,
             disk_percent=round(disk.percent, 1),
-            net_sent_mb=net_sent_mb,
-            net_recv_mb=net_recv_mb,
             temperature_c=_cpu_temperature() if ADDON_TEMPERATURE in addons else None,
             swap_used_mb=_swap_used_mb() if ADDON_SWAP in addons else None,
             **_load_average(enabled=ADDON_LOAD_AVG in addons),
@@ -179,83 +167,6 @@ class MetricsCollector:
             self._cpu_primed = True
             return None
         return round(value, 1)
-
-    def _network_rates(self) -> tuple[float | None, float | None]:
-        """Ağ trafiğini saniyede MB olarak döndürür (gönderilen, alınan).
-
-        psutil sürekli artan toplam bayt sayacı verir; hız, iki ölçümün farkının
-        geçen süreye bölünmesidir. İki durumda hesap yapılamaz ve None döner:
-          * ilk ölçüm — karşılaştırılacak önceki sayaç yok,
-          * sayacın geriye gitmesi — makine yeniden başlamış ve sayaç sıfırlanmış
-            demektir; fark negatif çıkar ve anlamsızdır.
-
-        LOOPBACK HARİÇ (`lo`). psutil.net_io_counters() varsayılan olarak tüm
-        arayüzleri toplar ve loopback da bunlara dâhildir; oysa `lo` üzerindeki
-        trafik makinenin kendi içinde kalır, ağa hiç çıkmaz. Aynı bayt hem
-        gönderilen hem alınan olarak sayıldığı için ölçüm iki kez şişerdi:
-        yerel bir veritabanına konuşan bir uygulama, ağ kartı boşken bile
-        grafikte megabitler gösterirdi. Kullanıcının sorusu "bu makine ağı ne
-        kadar kullanıyor" — cevabın içine makinenin kendi kendine konuşması
-        girmemeli.
-        """
-        totals = self._external_bytes()
-        now = time.monotonic()
-        previous = self._previous_net
-
-        if totals is None:
-            # Arayüz listesi okunamadı. Sayaç DA sıfırlanır: eski tabanı
-            # saklasaydık, okuma geri geldiğinde arada geçen tüm süre tek bir
-            # örneğe sıkışır ve sahte bir sıçrama olarak çizilirdi.
-            self._previous_net = None
-            return None, None
-
-        sent, recv = totals
-
-        # Sayaçlar her durumda güncellenir: hesap yapılamayan bir ölçüm bile
-        # bir SONRAKİ ölçümün tabanı olur.
-        self._previous_net = (sent, recv, now)
-
-        if previous is None:
-            return None, None
-
-        previous_sent, previous_recv, previous_time = previous
-        elapsed = now - previous_time
-        if elapsed <= 0:
-            return None, None
-        if sent < previous_sent or recv < previous_recv:
-            return None, None
-
-        sent_rate = (sent - previous_sent) / BYTES_PER_MB / elapsed
-        recv_rate = (recv - previous_recv) / BYTES_PER_MB / elapsed
-        return round(sent_rate, 3), round(recv_rate, 3)
-
-    @staticmethod
-    def _external_bytes() -> tuple[int, int] | None:
-        """Loopback dışındaki arayüzlerin toplam gönderilen/alınan baytı.
-
-        Arayüz adı `lo` ile başlıyorsa atlanır: Linux'ta `lo`, ağ ad alanı
-        kullanan kurulumlarda `lo0`/`lo1` da görülebilir. Ad üzerinden eleme
-        kaba bir ölçüt ama psutil arayüzün türünü söylemiyor; alternatif,
-        her platform için ayrı bir sistem çağrısı yazmak olurdu.
-
-        Sayaç geri toplandığı için, ARAYÜZ SAYISI DEĞİŞİRSE (bir VPN kalkar,
-        bir kapsayıcı köprüsü inerse) toplam geriye gidebilir. Bu, çağıranın
-        zaten ele aldığı "sayaç geriye gitti" durumuna düşer: o örnek atlanır,
-        bir sonraki yeni tabandan hesaplanır.
-        """
-        try:
-            per_nic = psutil.net_io_counters(pernic=True)
-        except (OSError, RuntimeError):
-            return None
-
-        sent = 0
-        recv = 0
-        for name, counters in per_nic.items():
-            if name.lower().startswith("lo"):
-                continue
-            sent += counters.bytes_sent
-            recv += counters.bytes_recv
-        return sent, recv
 
 
 def _cpu_temperature() -> float | None:

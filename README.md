@@ -2,7 +2,7 @@
 
 **Remote log-shipping and monitoring** — for machines that may not survive long enough to tell you what happened to them.
 
-A small **agent** runs on every monitored machine. It continuously collects the machine's metrics (CPU, RAM, disk, network) and system logs and ships them to the cloud **before** the machine goes down. By the time the machine becomes unreachable, the events leading up to the crash are already somewhere else — readable from any browser.
+A small **agent** runs on every monitored machine. It continuously collects the machine's metrics (CPU, RAM, disk) and system logs and ships them to the cloud **before** the machine goes down. By the time the machine becomes unreachable, the events leading up to the crash are already somewhere else — readable from any browser.
 
 Like an aircraft's black box: it records up to the last moment, and it sits where the crash cannot reach it.
 
@@ -92,7 +92,6 @@ Every endpoint the collector exposes, and who it accepts:
 | `cpu_percent` | CPU usage since the previous sample |
 | `ram_used_mb` | RAM in use — `total − available` (reclaimable space such as cache excluded) |
 | `disk_percent` | How full the root directory (`/`) is |
-| `net_sent_mb` / `net_recv_mb` | Network traffic — not total bytes but a **rate in MB/s**, loopback excluded |
 
 A field that cannot be computed (the first sample, a counter reset after a reboot) is written as **`null`**, not `0`: "I could not measure it" is never confused with "it was zero".
 
