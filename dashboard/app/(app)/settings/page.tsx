@@ -2,14 +2,12 @@
  * Settings — kenar çubuğundaki "Settings" bölümünün sayfası.
  *
  * Burada DÜZENLENEBİLİR alan neredeyse yok ve bu bir eksiklik değil, §2'nin
- * "config = insan sınırı, policy = sistem sınırı" ayrımının doğrudan sonucu:
+ * "config = insan sınırı" ayrımının doğrudan sonucu:
  *
  *   - Toplama aralıkları, eşikler, spool sınırları → CONFIG. İnsan sınırı ama
  *     o insan makinenin sahibi ve ayar makinede duruyor (/etc/tracebox/config.toml,
  *     §4.3). Dashboard'dan yazılamaz — yazılabilseydi tek yazar kuralı kırılır,
  *     agent'ın diskteki dosyası ile bulutun kopyası ayrışırdı.
- *   - Saklama süresi → POLICY. Sistem sınırı; kullanıcı kendi faturasını
- *     kendi büyütemesin diye salt okunur.
  *   - Tema → gerçekten kullanıcının, gerçekten burada.
  *
  * Bu yüzden sayfa bir form değil, bir KÜNYE: hangi ayarın nerede yaşadığını ve
@@ -230,31 +228,6 @@ export default function SettingsPage() {
               {devices ? devices.length : "—"}
             </span>
           </Row>
-        </Card>
-
-        {/* --- policy -------------------------------------------------- */}
-        <Card
-          title="Retention"
-          description="A policy, not a preference — this one is deliberately read-only."
-        >
-          <Row
-            label="History kept"
-            hint="Metrics, logs and crash snapshots older than this are deleted every night at 00:00 UTC. The cut-off uses the time the collector received a row, never the timestamp the device wrote — otherwise a host with a wrong clock could keep its data forever."
-          >
-            <span className="text-lg font-semibold tabular-nums">
-              {account ? `${account.retention_days} days` : "—"}
-            </span>
-          </Row>
-          <div className="bg-bg-soft px-4 sm:px-5 py-4">
-            <p className="text-xs leading-relaxed text-muted">
-              TraceBox is a black box, not an archive: it answers{" "}
-              <span className="text-fg">what happened just before this
-              machine went down</span>, and that question has a short shelf
-              life. Letting each account extend its own window would quietly
-              turn a fixed storage bill into an open-ended one, so the window is
-              set by the system rather than by you.
-            </p>
-          </div>
         </Card>
 
         {/* --- agent tarafındaki ayarlar -------------------------------- */}

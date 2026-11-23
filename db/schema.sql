@@ -50,14 +50,8 @@
 -- Satırı triggers.sql içindeki on_auth_user_created trigger'ı ekler: auth.users
 -- tablosuna her yeni kayıt düştüğünde aynı id ile burada bir satır açılır.
 create table accounts (
-  id             uuid primary key references auth.users(id) on delete cascade,
-
-  -- Retention job'ının (retention.sql) okuduğu değer: bu hesabın satırları kaç
-  -- gün sonra silinecek. rls.sql'de accounts için UPDATE politikası tanımlı
-  -- olmadığından dashboard üzerinden değiştirilemez — policy, config değil.
-  retention_days integer     not null default 10,
-
-  created_at     timestamptz not null default now()
+  id         uuid        primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
 );
 
 
