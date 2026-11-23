@@ -1,19 +1,7 @@
 /**
- * Sol sabit navigasyon — `dashboard/example/2`'nin BİREBİR karşılığı.
+ * Sol sabit navigasyon: Hosts ve Settings.
  *
- * Önceki hâlde menü referanstan bilerek sapıyordu: yalnızca "Cihazlar" vardı,
- * altında hesabın cihazları listeleniyordu. Gerekçe "tıklanınca boş sayfa açan
- * menü ürünü olduğundan büyük gösterir" idi. Kullanıcı bu yorumu geri aldı ve
- * görselin aynen kopyalanmasını istedi (§9.11.1'in "birebir" kuralı); menü
- * artık referanstaki yedi öğe.
- *
- * İlk hâlde yalnızca ilk iki öğenin sayfası vardı; kalan beşi
- * tıklanmayan `<span>` olarak duruyordu — var olmayan bir sayfaya href vermek
- * kullanıcıyı 404'e koşturmak olurdu. 2026-08-31'de beşinin de kendi sayfası
- * yazıldı ve pasif dal kaldırıldı: menünün tamamı artık gerçekten çalışıyor.
- *
- * Genişlik 212px — görselden ölçüldü (kenar çizgisi x=212). Etiketler İngilizce,
- * yine görseldeki gibi.
+ * Genişlik 212px. Etiketler İngilizce.
  */
 "use client";
 
@@ -22,7 +10,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   IconClose,
-  IconInventory,
   IconServer,
   IconSettings,
 } from "./icons";
@@ -41,12 +28,6 @@ const NAV: NavItem[] = [
     icon: IconServer,
     href: "/devices",
     match: (p) => p.startsWith("/devices"),
-  },
-  {
-    label: "Inventory",
-    icon: IconInventory,
-    href: "/inventory",
-    match: (p) => p === "/inventory",
   },
   {
     label: "Settings",

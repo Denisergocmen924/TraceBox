@@ -273,16 +273,6 @@ export function IconLockOpen(p: IconProps) {
  * ayrı bir stil yok.
  */
 
-/** Inventory — bölmeli kutu. */
-export function IconInventory(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M7 9.5h3M7 14.5h3M14 9.5h3M14 14.5h3" />
-    </Svg>
-  );
-}
-
 /** Settings — dişli. */
 export function IconSettings(p: IconProps) {
   return (
