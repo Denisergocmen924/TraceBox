@@ -26,7 +26,7 @@ export function LiveLock({
   connected,
   /**
    * Rozetin KAPSAMI: yanındaki panel hangi makineye bakıyor. `null` = hesabın
-   * tümü (Logs sayfası, süzgeç kapalıyken).
+   * tümü (`deviceId = null`).
    *
    * Kanalın kendi kapsamıyla aynı olmak ZORUNDA değil ve metriklerde zaten
    * değil: `subscribeMetrics` bilerek hesap geneli dinliyor (lib/realtime.ts),

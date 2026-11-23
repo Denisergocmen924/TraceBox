@@ -21,17 +21,14 @@
  * karışmıyor — sayfalanan sorgunun sağ ucu `anchor`da dondurulmuş durumda,
  * yani canlı satırlar tanım gereği onun dışında kalıyor.
  *
- * İKİ YERDE kullanılıyor: cihaz detayında tek bir makinenin logları, Logs
- * sayfasında hesabın tamamı (`deviceId = null`). Fark yalnızca bir sütun —
- * hesap genelinde her satır hangi makineden geldiğini de yazıyor. Sayfaya
- * ayrı bir liste yazmak, blok atma/geri getirme ve canlı tavan mantığını
- * ikinci kez yazmak olurdu.
+ * Cihaz detayında tek bir makinenin loglarını gösteriyor (`deviceId`).
+ * `deviceId = null` verilirse sorgu cihaz filtresi yazmıyor ve hesabın
+ * tamamını (RLS kapsamında) okuyor.
  */
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import { useApp } from "@/lib/appState";
 import { LiveLock } from "./LiveLock";
 import {
@@ -102,16 +99,7 @@ type Block = {
 };
 
 /** Tek log satırı — canlı bölüm ve sayfalanmış liste aynı biçimi kullanıyor. */
-function Line({
-  row,
-  now,
-  hostName,
-}: {
-  row: LogRow;
-  now: number;
-  /** Yalnızca hesap genelinde dolu; cihaz detayında sütun hiç çizilmiyor. */
-  hostName?: string;
-}) {
+function Line({ row, now }: { row: LogRow; now: number }) {
   const [open, setOpen] = useState(false);
 
   /* Telefonda satır yalnızca BAŞLIK (tek satır, kısaltılmış); dokununca tam
@@ -128,18 +116,6 @@ function Line({
       <span className="shrink-0 font-mono tabular-nums text-faint sm:w-16 sm:pt-0.5">
         {logTime(row.measured_at, now)}
       </span>
-      {hostName !== undefined && (
-        /* Makine adı BAĞLANTI: bir hata satırı görüldüğünde bir sonraki soru
-           her zaman "o makinede başka ne oluyordu" ve cevabı cihaz detayında. */
-        <Link
-          href={`/devices/${row.device_id}`}
-          title={hostName}
-          onClick={(e) => e.stopPropagation()}
-          className="max-w-32 shrink-0 truncate font-medium text-accent transition hover:text-accent-strong sm:w-28 sm:max-w-none sm:pt-0.5"
-        >
-          {hostName}
-        </Link>
-      )}
       <span
         className={`h-fit shrink-0 rounded-md border px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide sm:w-20 ${LEVEL_STYLE[row.level]}`}
       >
@@ -155,12 +131,7 @@ function Line({
         {row.message}
       </span>
       {open && (
-        <LogDetail
-          row={row}
-          now={now}
-          hostName={hostName}
-          onClose={() => setOpen(false)}
-        />
+        <LogDetail row={row} now={now} onClose={() => setOpen(false)} />
       )}
     </li>
   );
@@ -170,12 +141,10 @@ function Line({
 function LogDetail({
   row,
   now,
-  hostName,
   onClose,
 }: {
   row: LogRow;
   now: number;
-  hostName?: string;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -216,7 +185,7 @@ function LogDetail({
           </button>
         </div>
         <p className="mt-3 text-xs text-muted">
-          {[hostName, row.source].filter(Boolean).join(" · ") || "—"}
+          {row.source || "—"}
         </p>
         <p className="mt-2 whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed">
           {row.message}
@@ -227,21 +196,9 @@ function LogDetail({
   );
 }
 
-export function LogList({
-  deviceId,
-  deviceNames,
-  scrollerClass = "max-h-[32rem]",
-}: {
-  /** `null` = hesabın tüm cihazları (Logs sayfası). */
+export function LogList({ deviceId }: {
+  /** `null` = hesabın tüm cihazları. */
   deviceId: string | null;
-  /**
-   * Verilirse her satır hangi makineden geldiğini yazar. Hesap genelinde
-   * ZORUNLU: kaynağı yazmayan bir akış, iki makinenin loglarını tek bir
-   * makinenin logu gibi gösterirdi.
-   */
-  deviceNames?: Map<string, string>;
-  /** Kaydırma kutusunun yüksekliği. Kendi sayfasında ekranın tamamı kadar. */
-  scrollerClass?: string;
 }) {
   const { timeWindow, zoomDepth, locked, now } = useApp();
   const { from: fromMs, to: toMs } = timeWindow;
@@ -539,14 +496,6 @@ export function LogList({
 
   const liveIds = useMemo(() => new Set(liveRows.map((r) => r.id)), [liveRows]);
 
-  /*
-   * Adı bilinmeyen cihaz için "—" yazılıyor, sütun atlanmıyor: cihaz listesi
-   * 10 saniyede bir yenileniyor ve yeni eklenmiş bir makinenin logu haritadan
-   * birkaç saniye önce gelebilir. Sütunun o satırda kaybolması, altındaki
-   * bütün hizayı kaydırırdı.
-   */
-  const hostNameOf = (row: LogRow) =>
-    deviceNames ? (deviceNames.get(row.device_id) ?? "—") : undefined;
   const total =
     liveRows.length +
     blocks.reduce((sum, b) => sum + (b.rows?.length ?? b.count), 0);
@@ -573,8 +522,7 @@ export function LogList({
         </div>
 
         {/* Kilit + rozet; grafikteki ikilinin aynısı (components/LiveLock.tsx).
-            Aynı bayrağı çeviriyorlar — Logs sayfasında grafik yok, kilit orada
-            da bir yerde bulunmak zorunda. */}
+            Aynı bayrağı çeviriyorlar. */}
         <LiveLock connected={connected} deviceId={deviceId} />
 
         {/*
@@ -601,7 +549,7 @@ export function LogList({
       <div
         ref={scroller}
         onScroll={onScroll}
-        className={`relative overflow-y-auto ${scrollerClass}`}
+        className="relative max-h-[32rem] overflow-y-auto"
       >
         {error && (
           <p className="px-5 py-4 text-sm text-danger">
@@ -624,12 +572,7 @@ export function LogList({
             </p>
             <ul className="divide-y divide-line/50">
               {liveRows.map((row) => (
-                <Line
-                  key={row.id}
-                  row={row}
-                  now={now}
-                  hostName={hostNameOf(row)}
-                />
+                <Line key={row.id} row={row} now={now} />
               ))}
             </ul>
           </>
@@ -653,12 +596,7 @@ export function LogList({
                 {block.rows
                   .filter((row) => !liveIds.has(row.id))
                   .map((row) => (
-                    <Line
-                      key={row.id}
-                      row={row}
-                      now={now}
-                      hostName={hostNameOf(row)}
-                    />
+                    <Line key={row.id} row={row} now={now} />
                   ))}
               </ul>
             )}

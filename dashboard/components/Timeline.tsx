@@ -45,14 +45,10 @@
  * Yeni veri geldiğinde kovalar SUNUCUDAN yeniden çekiliyor, tarayıcıda
  * güncellenmiyor: seyreltme metrics_buckets'ta yaşıyor (§9.7) ve ikinci bir
  * kopyasını buraya yazmak, iki hesabın zamanla ayrışması demekti.
- *
- * Bileşen `components/` altında, bir sayfanın yanında değil: hem cihaz detayı
- * hem Metrics sayfası aynı çizelgeyi gösteriyor.
  */
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useApp } from "@/lib/appState";
 import { LiveLock } from "./LiveLock";
 import {
@@ -101,9 +97,6 @@ export function Timeline({
   ramTotalMb,
   diskTotalMb,
   enabledAddons = [],
-  heading,
-  href,
-  showCrashes = true,
 }: {
   deviceId: string;
   /** RAM grafiğinin tavanı. Cihazın tamamı değil sadece bu alan gerekiyor:
@@ -116,14 +109,6 @@ export function Timeline({
       (lib/addons.ts). Liste her yenilemede yeni bir dizi olabilir, bu yüzden
       türetme aşağıda içeriğe göre anahtarlanıyor. */
   enabledAddons?: readonly string[];
-  /** Başlık. Metrics sayfasında makinenin adı, cihaz detayında "Timeline". */
-  heading?: string;
-  /** Verilirse başlık cihaz detayına bağlanır (Metrics sayfasında). */
-  href?: string;
-  /** Metrics sayfasında çöküş şeridi yok: orada ekranda birden çok makine var
-      ve her birine bir şerit eklemek sayfayı üç katına çıkarırdı. Çöküş
-      kayıtları cihazın kendi sayfasında, tam ayrıntısıyla duruyor. */
-  showCrashes?: boolean;
 }) {
   const {
     timeWindow,
@@ -216,8 +201,6 @@ export function Timeline({
         if (mine === epoch.current && !silent) setLoading(false);
       });
 
-    if (!showCrashes) return;
-
     /*
      * Çöküş kayıtları AYRI bir istek ve ayrı bir hata yolu: iki sorgunun
      * ortak bir Promise.all'da toplanması, birinin başarısızlığında diğerinin
@@ -247,7 +230,7 @@ export function Timeline({
      * ediyordu. Sayaç yalnızca düğmeye basıldığında arttığı için kendi
      * başına gereksiz bir çekim de yaratmıyor.
      */
-  }, [deviceId, fromMs, toMs, spanMs, showCrashes, reloadNonce]);
+  }, [deviceId, fromMs, toMs, spanMs, reloadNonce]);
 
   /* --- sürükleyerek seçme (§9.8) ---------------------------------------- */
 
@@ -380,8 +363,6 @@ export function Timeline({
   const control =
     "inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-3 py-2 font-medium sm:px-2 sm:py-1 text-muted transition hover:border-accent/50 hover:text-fg";
 
-  const title = heading ?? "Timeline";
-
   return (
     <section className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
       <header className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
@@ -389,15 +370,7 @@ export function Timeline({
           <IconActivity className="size-[18px]" />
         </span>
         <div className="min-w-0">
-          <h2 className="truncate font-medium">
-            {href ? (
-              <Link href={href} className="transition hover:text-accent">
-                {title}
-              </Link>
-            ) : (
-              title
-            )}
-          </h2>
+          <h2 className="truncate font-medium">Timeline</h2>
           {/*
             §9.6 madde 5 — ZORUNLU. Seyreltilmiş bir grafik, seyreltildiğini
             söylemezse sessizce yalan söylemiş olur: kullanıcı ham veriye
@@ -468,7 +441,7 @@ export function Timeline({
         ulaşmamış olabilir) ve o durumda işaretin kaybolması, elimizdeki tek
         kanıtı gizlemek olurdu.
       */}
-      {showCrashes && !error && (
+      {!error && (
         <CrashMarkers
           snapshots={crashes}
           truncated={crashTruncated}

@@ -104,7 +104,7 @@ function subscribeInserts<T>(params: {
  * Supabase'in kanal sayısı planla sınırlı.
  */
 export function subscribeLogs(params: {
-  /** `null` = hesabın tümü (Logs sayfası). Süzgeç düşer, RLS kalır. */
+  /** `null` = hesabın tümü. Süzgeç düşer, RLS kalır. */
   deviceId: string | null;
   onInsert: (row: LogRow) => void;
   /** Kanalın gerçekten kurulup kurulmadığı — "Live" rozetinin taşıma yarısı. */

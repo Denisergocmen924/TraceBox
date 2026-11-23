@@ -312,16 +312,6 @@ export function IconChart(p: IconProps) {
   );
 }
 
-/** Logs — satırlı belge. */
-export function IconFileText(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <rect x="4" y="3.5" width="16" height="17" rx="2" />
-      <path d="M8 8.5h8M8 12h8M8 15.5h5" />
-    </Svg>
-  );
-}
-
 /** Inventory — bölmeli kutu. */
 export function IconInventory(p: IconProps) {
   return (
