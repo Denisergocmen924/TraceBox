@@ -1,12 +1,11 @@
 -- =============================================================================
 -- TraceBox — db/retention.sql
 --
--- Her gece çalışan otomatik silme işi (retention). Hesabın `retention_days`
--- politikasından daha eski satırları dört veri tablosundan siler:
--- metrics, logs, crash_snapshots ve commands.
+-- Her gece çalışan otomatik silme işi (retention). 10 günden eski satırları
+-- dört veri tablosundan siler: metrics, logs, crash_snapshots ve commands.
 --
--- Süre hesabı satır başına değil HESAP başına yapılır: her satır kendi
--- sahibinin accounts.retention_days değerine göre ölçülür (varsayılan 10 gün).
+-- Süre bütün hesaplar için aynı ve sabittir (10 gün); `interval '10 days'`
+-- her DELETE içinde ayrı ayrı yazılıdır.
 --
 -- CLAUDE.md §5 — silme ölçütü sunucunun yazdığı zaman damgasıdır.
 -- =============================================================================
@@ -46,26 +45,18 @@ create extension if not exists pg_cron;
 select cron.schedule('tracebox_retention', '0 0 * * *', $$
 
   -- --- metrics -------------------------------------------------------------
-  -- `using accounts` join'i, satırın sahibinin retention_days değerine ulaşmak
-  -- için. Ölçüt received_at: satırın SUNUCUYA vardığı an. (measured_at'i agent
+  -- Ölçüt received_at: satırın SUNUCUYA vardığı an. (measured_at'i agent
   -- yazar; o sütun zaman çizelgesi içindir ve silmeye ölçüt olamaz.)
-  -- (a.retention_days || ' days')::interval → örn. 10 → '10 days' → interval.
-  delete from public.metrics m
-    using public.accounts a
-   where m.account_id = a.id
-     and m.received_at < now() - (a.retention_days || ' days')::interval;
+  delete from public.metrics
+   where received_at < now() - interval '10 days';
 
   -- --- logs ----------------------------------------------------------------
-  delete from public.logs l
-    using public.accounts a
-   where l.account_id = a.id
-     and l.received_at < now() - (a.retention_days || ' days')::interval;
+  delete from public.logs
+   where received_at < now() - interval '10 days';
 
   -- --- crash_snapshots -----------------------------------------------------
-  delete from public.crash_snapshots c
-    using public.accounts a
-   where c.account_id = a.id
-     and c.received_at < now() - (a.retention_days || ' days')::interval;
+  delete from public.crash_snapshots
+   where received_at < now() - interval '10 days';
 
   -- --- commands ------------------------------------------------------------
   -- İki farkla:
@@ -81,11 +72,9 @@ select cron.schedule('tracebox_retention', '0 0 * * *', $$
   --      olsun burada silinmez. (Çevrimdışı bir cihaz için bekleyen komut
   --      cihaz geri dönene kadar durur; cihaz hiç dönmezse satır, devices
   --      kaydının silinmesiyle CASCADE üzerinden gider.)
-  delete from public.commands c
-    using public.accounts a
-   where c.account_id = a.id
-     and c.status = 'applied'
-     and c.created_at < now() - (a.retention_days || ' days')::interval;
+  delete from public.commands
+   where status = 'applied'
+     and created_at < now() - interval '10 days';
 
 $$);
 

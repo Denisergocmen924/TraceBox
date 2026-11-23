@@ -133,25 +133,24 @@ def test_only_applied_commands_are_deleted(job_body):
     assert re.search(r"status\s*=\s*'applied'", statement)
 
 
-# --- Politikanın hesap başına uygulanması ----------------------------------
+# --- Sabit politika --------------------------------------------------------
 
 
 @pytest.mark.parametrize("table", DATA_TABLES)
-def test_age_limit_comes_from_the_owning_account(job_body, table):
-    """Süre sabit değil, satırın SAHİBİNİN retention_days politikasından gelir.
+def test_age_limit_is_a_fixed_ten_days(job_body, table):
+    """Süre bütün hesaplar için aynı: `interval '10 days'`.
 
-    Sabit bir süre bugün doğru sonucu verir (tüm hesaplar varsayılan 10 gün),
-    yarın farklı politikalı bir hesap eklendiğinde sessizce yanlış olur.
+    Süre başka bir değere kayarsa (ya da bir sütundan okunmaya başlarsa)
+    silme davranışı sessizce değişir; hiçbir yerde hata üretilmez.
     """
     statement = delete_statement(job_body, table)
-    assert re.search(r"using\s+public\.accounts\s+a\b", statement)
-    assert "a.retention_days" in statement
+    assert re.search(r"now\(\)\s*-\s*interval\s+'10 days'", statement)
 
 
-@pytest.mark.parametrize("table", DATA_TABLES)
-def test_rows_are_matched_to_their_own_account(job_body, table):
-    """Join şartı olmadan `using` çapraz birleşime döner: her satır her hesapla eşleşir."""
-    assert re.search(r"account_id\s*=\s*a\.id", delete_statement(job_body, table))
+def test_no_per_account_lookup_remains(sql):
+    """`accounts` birleştirmesi ve `retention_days` sütunu kaldırıldı."""
+    assert "retention_days" not in sql
+    assert "public.accounts" not in sql
 
 
 # --- Zamanlama -------------------------------------------------------------

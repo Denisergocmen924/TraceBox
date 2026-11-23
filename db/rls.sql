@@ -50,10 +50,7 @@ create policy sel_accounts on public.accounts
   for select
   using (id = (select auth.uid()));
 
--- UPDATE politikası BİLEREK YOK: retention_days bir POLICY'dir
--- (sistem sınırı), kullanıcının değiştirebileceği bir config değil.
--- Kullanıcı kendi retention'ını 3650 güne çekebilseydi fatura mantrası
--- ("az yaz, seyrek çek, kısa sakla") anlamsızlaşırdı.
+-- UPDATE politikası YOK: accounts satırı istemciden değiştirilemez.
 -- INSERT politikası da yok: satırı yalnızca handle_new_user() trigger'ı açar.
 -- DELETE politikası da yok: hesap silme auth.users üzerinden CASCADE ile olur.
 
