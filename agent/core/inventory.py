@@ -5,8 +5,8 @@ Envanter, metriklerin aksine NADİREN değişir: işlemci modeli, çekirdek say�
 toplam RAM, disk, işletim sistemi sürümü. Bu yüzden ayrı bir uç noktaya gider
 (POST /inventory) ve devices satırının üzerine yazılır — zaman serisi değildir.
 
-STATİK EKLENTİ — gpu_model "nadiren değişir" tanımına uyar: makinede okunur,
-eklenti açıksa doldurulur (aşağıda).
+gpu_model "nadiren değişir" tanımına uyar: makinede okunur, NVIDIA GPU yoksa
+null kalır (aşağıda).
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import psutil
 
 from agent import __version__
 from agent.core.clock import epoch_to_utc_iso
-from agent.core.config import ADDON_GPU, Config
 from agent.core.gpu import GpuReader
 from agent.core.metrics import BYTES_PER_MB, DISK_MOUNT_POINT
 
@@ -44,9 +43,8 @@ class Inventory:
     kernel_version: str
     last_boot: str
     agent_version: str
-    enabled_addons: list[str]
 
-    # Statik eklenti: gpu eklentisi kapalıyken None kalır.
+    # NVIDIA GPU yoksa veya okunamıyorsa None kalır.
     gpu_model: str | None = None
 
     def as_dict(self) -> dict:
@@ -59,7 +57,7 @@ class Inventory:
         return asdict(self)
 
 
-def collect_inventory(config: Config) -> Inventory:
+def collect_inventory() -> Inventory:
     """Makinenin güncel künyesini okur."""
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage(DISK_MOUNT_POINT)
@@ -79,10 +77,9 @@ def collect_inventory(config: Config) -> Inventory:
         kernel_version=platform.release(),
         last_boot=epoch_to_utc_iso(psutil.boot_time()),
         agent_version=__version__,
-        enabled_addons=list(config.enabled_addons),
         # Envanter açılışta bir kez okunur; GpuReader'ın burada durum
         # taşımasına gerek yok, tek çağrılık bir nesne yeter.
-        gpu_model=GpuReader().read_model() if ADDON_GPU in config.enabled_addons else None,
+        gpu_model=GpuReader().read_model(),
     )
 
 

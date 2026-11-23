@@ -56,17 +56,3 @@ disk_flush_step_percent = 0.1
 # spool from filling the disk during a long network outage.
 spool_max_age_days = 10
 spool_max_size_mb = 200
-
-# --- Add-ons -----------------------------------------------------------------
-# With an empty list only the core metrics are collected; every value added
-# here fills the matching field, and the ones left out stay null.
-#
-# Available values:
-#   "temperature"     CPU temperature         -> metrics.temperature_c
-#   "swap"            swap usage              -> metrics.swap_used_mb
-#   "load_avg"        load average (Linux)    -> metrics.load_avg_1/5/15
-#   "gpu"             GPU usage + VRAM        -> metrics.gpu_usage_percent, gpu_vram_used_mb
-#   "crash_processes" the 5 heaviest processes at flush time -> crash_snapshots
-#
-# Example: enabled_addons = ["swap", "load_avg"]
-enabled_addons = []

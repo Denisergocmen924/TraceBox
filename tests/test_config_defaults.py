@@ -64,10 +64,7 @@ def install_toml() -> dict:
     match = re.search(r"<<TOML\n(.*?)\nTOML\n", body, re.DOTALL)
     assert match, "install.sh içinde config.toml heredoc'u bulunamadı"
 
-    # Eklenti listesi bir TOML DİZİSİ: "placeholder" geçersiz TOML olurdu. Tüm
-    # sorulara "hayır" denen kurulumun yazdığı değer (`[]`) konur — varsayılan.
-    filled = match.group(1).replace("${ADDONS_TOML}", "[]")
-    filled = re.sub(r"\$\{[A-Z_]+\}", "placeholder", filled)
+    filled = re.sub(r"\$\{[A-Z_]+\}", "placeholder", match.group(1))
     return tomllib.loads(filled)
 
 

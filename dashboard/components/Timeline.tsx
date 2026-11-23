@@ -5,7 +5,7 @@
  *   1. Donanım — CPU / RAM / Disk, hepsi ORTAK yüzde ekseninde üst üste.
  *      Üç değer aynı dikey hizada durduğundan "CPU fırladığında RAM ne
  *      yapıyordu?" sorusu tek bakışta okunuyor.
- *   2. Eklenti panelleri — cihazın açık eklentilerine göre (sıcaklık, swap,
+ *   2. Ek ölçü panelleri — pencerede verisi olanlar (sıcaklık, swap,
  *      yük ortalaması, GPU), her biri kendi biriminde ayrı bir bölme.
  *
  * Tüm grafikler AYNI bileşeni (MetricChart) kullanıyor, aynı `hoverTime`'ı ve
@@ -96,7 +96,6 @@ export function Timeline({
   deviceId,
   ramTotalMb,
   diskTotalMb,
-  enabledAddons = [],
 }: {
   deviceId: string;
   /** RAM grafiğinin tavanı. Cihazın tamamı değil sadece bu alan gerekiyor:
@@ -105,10 +104,6 @@ export function Timeline({
   ramTotalMb: number | null;
   /** Disk tooltip/lejantındaki mutlak değer için; yoksa yalnızca yüzde yazılır. */
   diskTotalMb: number | null;
-  /** Cihazın açık eklentileri; her türün grafiği yalnızca açıksa çıkar
-      (lib/addons.ts). Liste her yenilemede yeni bir dizi olabilir, bu yüzden
-      türetme aşağıda içeriğe göre anahtarlanıyor. */
-  enabledAddons?: readonly string[];
 }) {
   const {
     timeWindow,
@@ -314,11 +309,7 @@ export function Timeline({
     [buckets, ramTotalMb, diskTotalMb, widthMs],
   );
 
-  const addonKey = enabledAddons.join(",");
-  const addons = useMemo(
-    () => addonPanels(buckets, addonKey ? addonKey.split(",") : [], widthMs),
-    [buckets, addonKey, widthMs],
-  );
+  const addons = useMemo(() => addonPanels(buckets, widthMs), [buckets, widthMs]);
 
   const hoverIndex = useMemo(
     () => (hoverTime == null ? null : nearestIndex(buckets, hoverTime)),
@@ -491,7 +482,7 @@ export function Timeline({
             note={hardwareNote}
           />
 
-          {/* Eklenti grafikleri: her biri ayrı bölme, çünkü her birinin
+          {/* Ek ölçü grafikleri: her biri ayrı bölme, çünkü her birinin
               kendi birimi ve ekseni var (°C, MB, yük, %). Hepsi aynı zaman
               eksenini ve imleci paylaşıyor. */}
           {addons.map((panel) => (
@@ -502,19 +493,13 @@ export function Timeline({
                 tracks={panel.tracks}
                 hovered={hovered}
               />
-              {panel.tracks.length === 0 ? (
-                <p className="px-5 py-10 text-center text-sm text-muted">
-                  No {panel.title.toLowerCase()} samples in this range.
-                </p>
-              ) : (
-                <MetricChart
-                  {...shared}
-                  tracks={panel.tracks}
-                  ceiling={panel.ceiling}
-                  formatAxis={panel.formatAxis}
-                  height={180}
-                />
-              )}
+              <MetricChart
+                {...shared}
+                tracks={panel.tracks}
+                ceiling={panel.ceiling}
+                formatAxis={panel.formatAxis}
+                height={180}
+              />
             </div>
           ))}
         </>

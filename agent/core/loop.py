@@ -95,7 +95,7 @@ def _startup_inventory(config: Config, state: State) -> Inventory | None:
     Dönen değer gönderilene kadar bellekte bekler; `known_inventory` ancak
     collector'dan 200 alındıktan sonra yazılır.
     """
-    current = inventory_module.collect_inventory(config)
+    current = inventory_module.collect_inventory()
     _log(
         f"[start] inventory: {current.os_name} {current.os_version} · "
         f"{current.cpu_model} · "
@@ -127,7 +127,7 @@ def _collect(collector: MetricsCollector, spool: Spool, config: Config) -> Metri
     Spool'a yalnızca reading.sample yazılır; yanındaki ram_percent kaydedilmez,
     eşik karşılaştırmasını yapacak olan çağırana verilir.
     """
-    reading = collector.collect(config)
+    reading = collector.collect()
     spool.add(RECORD_METRIC, asdict(reading.sample))
     _log(f"[collect] {_format_sample(reading.sample)}")
     return reading
@@ -368,7 +368,7 @@ def _maybe_flush(
     # SIRA ÖNEMLİDİR: snapshot önce spool'a yazılır, sonra gönderim yapılır.
     # Ters sırada snapshot bir sonraki tura kalır ve kendisini tetikleyen
     # ölçümden ayrı bir istekte giderdi.
-    spool.add(RECORD_CRASH, flush_module.build_crash_snapshot(reason, config))
+    spool.add(RECORD_CRASH, flush_module.build_crash_snapshot(reason))
 
     # Damga gönderimden ÖNCE yazılır: gönderim başarısız olsa bile cooldown
     # başlamış sayılır. Aksi halde collector erişilemezken eşik her turda
@@ -425,10 +425,6 @@ def run(loader: ConfigLoader, store: StateStore, log_source: LogSource) -> None:
         f"poll={config.command_poll_seconds}s (tick={TICK_SECONDS}s)"
     )
     _log(f"[start] logging_enabled={state.logging_enabled}")
-    _log(
-        "[start] add-ons: "
-        + (", ".join(config.enabled_addons) if config.enabled_addons else "none (core only)")
-    )
     _log(
         "[start] journal cursor: "
         + ("stored — resuming" if state.journal_cursor else "none — starting from now")

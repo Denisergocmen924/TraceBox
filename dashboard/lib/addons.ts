@@ -1,13 +1,11 @@
 /**
- * Eklenti ölçülerinin grafikleri (agent `enabled_addons`, CLAUDE.md §4.3).
+ * Ek ölçülerin grafikleri: sıcaklık, swap, yük ortalaması ve GPU.
  *
- * Her eklenti kendi TÜRÜNE göre gösterilir: zaman serisi olanlar (sıcaklık,
- * swap, yük ortalaması, GPU) grafik olur; zaman serisi olmayan `crash_processes`
- * (ayrı bir tablo) burada YOK — o çöküş işaretlerinde zaten gösteriliyor.
+ * Zaman serisi olan bu dört ölçü grafik olur; zaman serisi olmayan çökme süreç
+ * listesi (ayrı bir tablo) burada YOK — o çöküş işaretlerinde gösteriliyor.
  *
- * Bir grafik YALNIZCA cihazın `enabled_addons` listesi o eklentiyi içeriyorsa
- * çıkar. Kapatılmış bir eklentinin eski verisi bu yüzden gizlenir; bilinçli
- * bir tercih (bkz. md/memory/decisions.md → "Eklenti grafikleri").
+ * Bir panel YALNIZCA seçili pencerede o ölçüden en az bir değer varsa çıkar.
+ * Makinede karşılığı olmayan ölçü (sensör, GPU yok) null gelir ve paneli açmaz.
  *
  * Çizim donanım grafikleriyle AYNI yoldan geçer: iz (Track) üretilir,
  * MetricChart çizer. Burada ikinci bir çizim mantığı yok.
@@ -23,9 +21,6 @@ import {
   type Track,
 } from "./metrics";
 
-/** Eklenti adları — agent/core/config.py ile birebir aynı. */
-export type AddonName = "temperature" | "swap" | "load_avg" | "gpu";
-
 /** Bir panelin tek çizgisi; `prefix` kovadaki `${prefix}_min|max|avg` sütunları. */
 type TrackDef = {
   key: string;
@@ -38,7 +33,6 @@ type TrackDef = {
 
 type PanelDef = {
   key: string;
-  addon: AddonName;
   title: string;
   subtitle: string;
   tracks: TrackDef[];
@@ -64,7 +58,6 @@ function formatMegabytes(value: number): string {
 const PANELS: PanelDef[] = [
   {
     key: "temperature",
-    addon: "temperature",
     title: "Temperature",
     subtitle: "CPU package temperature",
     tracks: [
@@ -79,7 +72,6 @@ const PANELS: PanelDef[] = [
   },
   {
     key: "swap",
-    addon: "swap",
     title: "Swap",
     subtitle: "swap space in use",
     tracks: [
@@ -94,7 +86,6 @@ const PANELS: PanelDef[] = [
   },
   {
     key: "load_avg",
-    addon: "load_avg",
     title: "Load average",
     subtitle: "runnable processes, 1 / 5 / 15 minute averages",
     tracks: [
@@ -132,7 +123,6 @@ const PANELS: PanelDef[] = [
   },
   {
     key: "gpu_usage",
-    addon: "gpu",
     title: "GPU usage",
     subtitle: "graphics processor utilisation",
     tracks: [
@@ -148,7 +138,6 @@ const PANELS: PanelDef[] = [
   },
   {
     key: "gpu_vram",
-    addon: "gpu",
     title: "GPU memory",
     subtitle: "video memory in use",
     tracks: [
@@ -176,22 +165,14 @@ function pickBand(prefix: string) {
 }
 
 /**
- * Cihazın AÇIK eklentilerine karşılık gelen grafik panelleri.
+ * Pencerede en az bir değeri olan ek ölçülerin grafik panelleri.
  *
- * Eklenti açık ama pencerede hiç örnek yoksa panel yine döner ve `tracks`
- * boş olur: çağıran "bu aralıkta örnek yok" yazar. Paneli düşürmek, kullanıcının
- * açtığı eklentinin neden görünmediğini açıklamasız bırakırdı.
+ * Hiçbir izi (track) çıkmayan panel döndürülmez.
  */
-export function addonPanels(
-  buckets: MetricBucket[],
-  enabledAddons: readonly string[],
-  widthMs: number,
-): AddonPanel[] {
+export function addonPanels(buckets: MetricBucket[], widthMs: number): AddonPanel[] {
   const panels: AddonPanel[] = [];
 
   for (const def of PANELS) {
-    if (!enabledAddons.includes(def.addon)) continue;
-
     const tracks: Track[] = [];
     for (const t of def.tracks) {
       const pick = pickBand(t.prefix);
@@ -208,6 +189,7 @@ export function addonPanels(
         format: def.format,
       });
     }
+    if (tracks.length === 0) continue;
 
     panels.push({
       key: def.key,

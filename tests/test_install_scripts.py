@@ -455,31 +455,11 @@ def test_uninstall_does_not_stop_the_unit_that_is_running_it(uninstall_sh):
     )
 
 
-# --- Eklenti seçimi --------------------------------------------------------
-
-ADDON_NAMES = ["temperature", "swap", "load_avg", "gpu", "crash_processes"]
+# --- Eklentiler yok -------------------------------------------------------
 
 
-def test_every_addon_is_asked_one_by_one(install_sh):
-    """Her eklenti kendi sorusunu alır; toplu "hepsi" cevabı yok."""
-    asked = code(install_sh)
-    for name in ADDON_NAMES:
-        assert f'"{name}"' in asked, f"{name} için soru yok"
-
-
-def test_addon_prompts_default_to_no(install_sh):
-    """Eklenti verilen bir izindir: Enter'a basmak onu AÇMAMALI."""
-    assert "[y/N]" in install_sh
-    assert "[Y/n]" not in install_sh
-
-
-def test_selected_addons_reach_the_config_file(install_sh):
-    """Cevaplar config'e yazılmalı; sabit `[]` kalırsa sorular boşa sorulur."""
-    assert "enabled_addons = ${ADDONS_TOML}" in code(install_sh)
-    assert "enabled_addons = []" not in code(install_sh)
-
-
-def test_addons_are_only_asked_when_the_config_is_written(install_sh):
-    """Mevcut config korunuyorsa kullanıcının eski seçimi ezilmemeli."""
-    write = install_sh.index("if (( WRITE_CONFIG ))")
-    assert install_sh.index('ask_addon "crash_processes"') > write
+def test_the_installer_asks_no_addon_questions_and_writes_no_addon_setting(install_sh):
+    """Eklentiler her zaman açık: kurulum ne soru sorar ne de config'e satır yazar."""
+    body = code(install_sh)
+    assert "ask_addon" not in body
+    assert "enabled_addons" not in body

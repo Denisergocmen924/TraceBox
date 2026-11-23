@@ -103,7 +103,6 @@ export default function DeviceDetailPage({
               deviceId={device.id}
               ramTotalMb={device.ram_total_mb}
               diskTotalMb={device.disk_total_mb}
-              enabledAddons={device.enabled_addons}
             />
             <LogList deviceId={device.id} />
           </div>

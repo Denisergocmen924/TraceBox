@@ -33,7 +33,7 @@ export type MetricBucket = {
 } & AddonBucketFields;
 
 /**
- * Eklenti sütunları (migration 0006). Hepsi opsiyonel: 0006 çalıştırılmadıysa fonksiyon bunları döndürmez ve eklenti
+ * Eklenti sütunları (migration 0006). Hepsi opsiyonel: 0006 çalıştırılmadıysa fonksiyon bunları döndürmez ve ek ölçü
  * grafikleri sessizce boş kalır, ekranın geri kalanı çalışır. Ön ek, lib/addons.ts
  * içindeki izlerin `prefix` alanıyla birebir aynı.
  */
@@ -240,7 +240,7 @@ export type Point = { t: number; min: number; max: number; avg: number };
 
 /**
  * Kovaları noktalara çevirir. Üç değerden biri bile null olan kova ATLANIR:
- * eklenti kapalıysa (§4.2) sütun boş gelir ve 0 kabul etmek "kullanım sıfırdı"
+ * makinede sensör/GPU yoksa sütun boş gelir ve 0 kabul etmek "kullanım sıfırdı"
  * demek olurdu — oysa doğrusu "ölçülmedi".
  */
 export function toPoints(buckets: MetricBucket[], series: SeriesDef): Point[] {

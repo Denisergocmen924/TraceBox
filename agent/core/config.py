@@ -29,23 +29,6 @@ INSECURE_PERMISSION_BITS = (
     stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH
 )
 
-# Seçilebilir eklentilerin adları. Tek tanım yeri BURASI: eklentiyi toplayan
-# modüller (metrics, inventory, flush) bu sabitleri import eder, böylece
-# config.toml'daki metinle kodun beklediği metin ayrışamaz.
-ADDON_TEMPERATURE = "temperature"
-ADDON_SWAP = "swap"
-ADDON_LOAD_AVG = "load_avg"
-ADDON_GPU = "gpu"
-ADDON_CRASH_PROCESSES = "crash_processes"
-
-KNOWN_ADDONS = (
-    ADDON_TEMPERATURE,
-    ADDON_SWAP,
-    ADDON_LOAD_AVG,
-    ADDON_GPU,
-    ADDON_CRASH_PROCESSES,
-)
-
 # Config'de bulunması ZORUNLU alanlar. Eksikse agent açılışta durur; varsayılan
 # uydurmak, yanlış adrese veri göndermeye çalışan bir agent üretirdi.
 REQUIRED_KEYS = ("collector_url", "device_key")
@@ -86,10 +69,6 @@ class Config:
     # --- Spool sınırları ---
     spool_max_age_days: int = 10
     spool_max_size_mb: int = 200
-
-    # --- Eklentiler ---
-    # Liste yerine tuple: frozen dataclass'ın içeriği de değiştirilemez olsun.
-    enabled_addons: tuple[str, ...] = ()
 
 
 def config_path() -> Path:
@@ -170,21 +149,6 @@ def _parse(raw: dict, *, warn) -> Config:
         )
         send_interval = MIN_SEND_INTERVAL_SECONDS
 
-    addons = raw.get("enabled_addons", [])
-    if not isinstance(addons, list) or not all(isinstance(a, str) for a in addons):
-        raise ConfigError("'enabled_addons' must be a list of strings")
-
-    # Tanınmayan ad HATA DEĞİL, uyarıdır: yazım hatası yüzünden agent'ı
-    # başlatmamak, bir eklentinin toplanmamasından daha ağır bir sonuç olurdu.
-    # Ama sessiz de kalınmaz — "temprature" yazan kullanıcı, sıcaklık sütunu
-    # neden hep null diye günlerce bakabilirdi.
-    unknown = [name for name in addons if name not in KNOWN_ADDONS]
-    if unknown:
-        warn(
-            f"unknown name in enabled_addons: {', '.join(unknown)} — ignored. "
-            f"Valid values: {', '.join(KNOWN_ADDONS)}"
-        )
-
     return Config(
         collector_url=raw["collector_url"].strip().rstrip("/"),
         device_key=raw["device_key"].strip(),
@@ -198,7 +162,6 @@ def _parse(raw: dict, *, warn) -> Config:
         disk_flush_step_percent=_positive_number(raw, "disk_flush_step_percent", 0.1),
         spool_max_age_days=_positive_int(raw, "spool_max_age_days", 10),
         spool_max_size_mb=_positive_int(raw, "spool_max_size_mb", 200),
-        enabled_addons=tuple(addons),
     )
 
 

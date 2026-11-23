@@ -11,16 +11,16 @@ maliyeti getirir; `nvidia-smi` sürücüyle birlikte zaten gelir. Aynı gerekçe
 journald okuması için de kullanıldı (systemd-python yerine `journalctl`
 çağrısı) — bağımlılık eklemek yerine sistemde HAZIR olanı çağırmak.
 
-KAPSAM: yalnızca NVIDIA. AMD/Intel GPU'lar için değer null kalır; eklenti
-açıksa bile yanlış bir sayı üretilmez.
+KAPSAM: yalnızca NVIDIA. AMD/Intel GPU'lar için değer null kalır; yanlış bir
+sayı üretilmez.
 """
 
 from __future__ import annotations
 
 import subprocess
 
-# Sürücü kuruluysa PATH'te bulunur. Bulunamaması hata değildir: eklenti açık
-# ama makinede NVIDIA GPU yok demektir.
+# Sürücü kuruluysa PATH'te bulunur. Bulunamaması hata değildir: makinede NVIDIA
+# GPU yok demektir.
 NVIDIA_SMI = "nvidia-smi"
 
 # Ölçüm aralığı saniyelerle ifade ediliyor; yanıt vermeyen bir süreç döngüyü

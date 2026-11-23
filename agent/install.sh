@@ -115,14 +115,6 @@ ask_yes_no() {
   [[ "${answer}" == "y" || "${answer}" == "Y" ]]
 }
 
-# Tek bir eklenti için "açılsın mı?" sorusu. Varsayılan HAYIR: eklenti
-# verilen bir izindir, sessizce açılmaz.
-ask_addon() {
-  local name="$1" description="$2"
-  printf '    %-16s %s\n' "${name}" "${description}" > "${TTY_DEVICE}"
-  ask_yes_no "  enable ${name}?"
-}
-
 run_as_service_user() {
   if have runuser; then
     runuser -u "${SERVICE_USER}" -- "$@"
@@ -319,23 +311,6 @@ if (( WRITE_CONFIG )); then
   [[ "${DEVICE_KEY}" == "${KEY_PREFIX}"* ]] \
     || warn "the key does not start with '${KEY_PREFIX}' — make sure you pasted the right value"
 
-  # --- Eklentiler (CLAUDE.md §4.3). Hepsi tek tek sorulur, varsayılan hayır. ---
-  ADDONS=()
-  say "optional add-ons (core metrics and logs are always collected):"
-  ask_addon "temperature"     "CPU temperature (needs hardware sensors)" && ADDONS+=("temperature")
-  ask_addon "swap"            "swap space in use"                        && ADDONS+=("swap")
-  ask_addon "load_avg"        "1 / 5 / 15 minute load average"           && ADDONS+=("load_avg")
-  ask_addon "gpu"             "GPU usage and video memory"               && ADDONS+=("gpu")
-  ask_addon "crash_processes" "the 5 heaviest processes at flush time"   && ADDONS+=("crash_processes")
-
-  # TOML dizisi: ["swap", "load_avg"] — boşsa [].
-  ADDONS_TOML="["
-  for addon in ${ADDONS[@]+"${ADDONS[@]}"}; do
-    [[ "${ADDONS_TOML}" == "[" ]] || ADDONS_TOML+=", "
-    ADDONS_TOML+="\"${addon}\""
-  done
-  ADDONS_TOML+="]"
-
   # Dosya İÇERİK yazılmadan önce kilitlenir: anahtar bir an bile başkalarının
   # okuyabileceği bir dosyada durmasın.
   : > "${CONFIG_FILE}"
@@ -363,8 +338,6 @@ disk_flush_step_percent = 0.1
 
 spool_max_age_days = 10
 spool_max_size_mb  = 200
-
-enabled_addons = ${ADDONS_TOML}
 TOML
 
   say "written: ${CONFIG_FILE} (owner ${SERVICE_USER}, mode 600)"
