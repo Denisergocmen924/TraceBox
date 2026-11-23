@@ -2,9 +2,7 @@
  * Üst yatay araç çubuğu — `dashboard/example/2`'nin BİREBİR karşılığı.
  *
  * Görselde dört şey var: solda "All Hosts" seçicisi, sağda "Last 1 hour"
- * seçicisi, yenile düğmesi ve avatar. Önceki hâldeki arama kutusu ve uyarı
- * zili KALDIRILDI — ikisi de referansta yok. Zilin içeriği kaybolmadı,
- * Overview'daki Alerts kartına taşındı; orada zaten daha görünür.
+ * seçicisi, yenile düğmesi ve avatar. Arama kutusu ve uyarı zili yoktur.
  *
  * Tema düğmesi burada YOK (2026-09-29 kaldırıldı) — Ayarlar sayfası zaten
  * kendi tema seçicisini taşıyor (bkz. settings/page.tsx), üst çubukta aynı

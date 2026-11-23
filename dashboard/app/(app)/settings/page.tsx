@@ -288,9 +288,7 @@ export default function SettingsPage() {
               then only when usage climbs another step (
               <Mono>disk_flush_step_percent</Mono>, 0.1 points by default). It
               re-arms once usage falls a point below the threshold. Edit the step
-              in that host&rsquo;s own <Mono>config.toml</Mono>. The red disk
-              warning on the Hosts and Alerts pages does not depend on any of
-              this — it stays for as long as the disk is over the threshold.
+              in that host&rsquo;s own <Mono>config.toml</Mono>.
             </p>
           </div>
         </Card>

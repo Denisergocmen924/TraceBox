@@ -1,15 +1,11 @@
 /**
  * "Gösterecek bir şey yok" kutusu — maskotlu.
  *
- * Hosts, Metrics, Logs, Inventory ve Alerts sayfalarının boş hâli beş yerde
- * aynı çıplak `<p>` idi: boş, standart, ürünün kimliğinden hiçbir şey
- * taşımıyor. Tek bileşen hem görünümü hem tonu ortaklaştırır; beş kopya
- * olsaydı biri er ya da geç farklı çıkardı.
+ * Hosts, Metrics, Logs ve Inventory sayfalarının boş hâlini tek bileşen
+ * çizer: maskot görseli, isteğe bağlı başlık ve sayfaya özgü açıklama.
  *
  * Poz sayfanın konusunu taşır (`mascot`): Logs büyüteçle okur, Metrics grafik
- * gösterir... Ton da pozla eşleşmeli: "her şey yolunda" mesajına şaşkın yüz
- * yanlış ton verirdi, o yüzden Alerts'in "Nothing to report" kutusu `ok`
- * pozunu (başparmak) kullanır.
+ * gösterir, aranan şey yoksa `shrug` omuz silker.
  *
  * `children` sayfaya özgü cümle (bağlantısıyla birlikte); başlık ve açıklama
  * isteğe bağlı, ikisi de yoksa yalnızca cümle gelir.
@@ -22,12 +18,10 @@ export type Mascot =
   | "metrics" // holografik grafiği gösteriyor
   | "logs" // büyüteçle log kağıdını okuyor
   | "inventory" // checklist
-  | "alert" // şaşkın, ünlem işaretleri
-  | "ok" // başparmak: her şey yolunda
   | "shrug" // omuz silkiyor: aranan şey yok
   | "lost"; // baş kaşıyor, soru işaretleri (404)
 
-/** Görsellerin doğal oranı 3:2 (alert hariç); `h-auto` kalanı çözer. */
+/** Görsellerin doğal oranı 3:2 ; `h-auto` kalanı çözer. */
 export function EmptyState({
   mascot,
   title,
