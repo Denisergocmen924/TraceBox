@@ -282,15 +282,6 @@ export default function InventoryPage() {
                 />
 
                 <Field
-                  label="External IP"
-                  value={
-                    <span className="tabular-nums">
-                      <Cell value={device.external_ip} />
-                    </span>
-                  }
-                />
-
-                <Field
                   label="Agent"
                   value={
                     <span className="tabular-nums">

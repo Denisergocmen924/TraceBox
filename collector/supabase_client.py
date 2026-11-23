@@ -90,11 +90,8 @@ DEVICE_WRITABLE_COLUMNS = frozenset(
         "agent_version",
         "gpu_model",
         "enabled_addons",
-        # sunucunun kendi bildiklerinden yazdıkları: varış anı ve bağlantının
-        # geldiği adres. external_ip listede ama InventoryIn'de DEĞİL — cihaz
-        # onu gönderemez, collector proxy başlığından türetir (M7).
+        # sunucunun kendi bildiği: varış anı.
         "last_seen",
-        "external_ip",
     }
 )
 

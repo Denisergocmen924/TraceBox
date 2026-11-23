@@ -115,38 +115,12 @@ ask_yes_no() {
   [[ "${answer}" == "y" || "${answer}" == "Y" ]]
 }
 
-# Kırmızı vurgu: yalnızca stdout gerçekten bir terminalse ve NO_COLOR tanımlı
-# değilse. Karar BİR KEZ, en üst düzeyde verilir: red() $(...) içinde
-# çağrıldığında stdout bir boru olur, orada `-t 1` her zaman yanlış çıkardı.
-USE_COLOR=0
-[[ -z "${NO_COLOR:-}" && -t 1 ]] && USE_COLOR=1
-
-red() {
-  if (( USE_COLOR )); then
-    printf '\033[1;31m%s\033[0m' "$*"
-  else
-    printf '%s' "$*"
-  fi
-}
-
 # Tek bir eklenti için "açılsın mı?" sorusu. Varsayılan HAYIR: eklenti
 # verilen bir izindir, sessizce açılmaz.
 ask_addon() {
   local name="$1" description="$2"
   printf '    %-16s %s\n' "${name}" "${description}" > "${TTY_DEVICE}"
   ask_yes_no "  enable ${name}?"
-}
-
-# external_ip: cihazın dış IP adresi sunucuda SAKLANIR (kişisel veri sayılabilir).
-# Bu yüzden iki ayrı onay: ikisi de "y" olmadan eklenti açılmaz.
-ask_external_ip() {
-  {
-    printf '\n    %s\n' "$(red '!! external_ip — stores this machine'"'"'s PUBLIC IP address on the server')"
-    printf '    %s\n' "$(red 'The address is written to your account and shown in the dashboard.')"
-    printf '    %s\n' "$(red 'Turning it off later removes the stored value, but only at the next agent start.')"
-  } > "${TTY_DEVICE}"
-  ask_yes_no "  I want the public IP stored (1/2)" || return 1
-  ask_yes_no "  Are you sure? Confirm once more (2/2)"
 }
 
 run_as_service_user() {
@@ -353,7 +327,6 @@ if (( WRITE_CONFIG )); then
   ask_addon "load_avg"        "1 / 5 / 15 minute load average"           && ADDONS+=("load_avg")
   ask_addon "gpu"             "GPU usage and video memory"               && ADDONS+=("gpu")
   ask_addon "crash_processes" "the 5 heaviest processes at flush time"   && ADDONS+=("crash_processes")
-  ask_external_ip && ADDONS+=("external_ip")
 
   # TOML dizisi: ["swap", "load_avg"] — boşsa [].
   ADDONS_TOML="["

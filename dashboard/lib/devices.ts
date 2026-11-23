@@ -144,7 +144,7 @@ const LIST_COLUMNS = `id, device_name, os_name, os_version, arch, cpu_cores_logi
              net_sent_mb, net_recv_mb )`;
 
 const DETAIL_COLUMNS = `${LIST_COLUMNS}, cpu_model, cpu_cores_physical,
-   kernel_version, gpu_model, external_ip`;
+   kernel_version, gpu_model`;
 
 export async function fetchDevices(): Promise<Device[]> {
   const client = supabase();
@@ -200,7 +200,6 @@ export type DeviceDetail = Device & {
   cpu_cores_physical: number | null;
   kernel_version: string | null;
   gpu_model: string | null;
-  external_ip: string | null;
 };
 
 /** Postgres: geçersiz UUID metni. Uydurulmuş bir URL hataya değil, 404'e düşmeli. */
@@ -297,7 +296,6 @@ export type InventoryDevice = Device & {
   cpu_cores_physical: number | null;
   kernel_version: string | null;
   gpu_model: string | null;
-  external_ip: string | null;
 };
 
 /**

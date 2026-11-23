@@ -52,13 +52,12 @@ import {
  */
 type Dialog = "none" | "delete" | "force";
 
-/** Agent'ın bildiği altı eklenti (agent/core/config.py KNOWN_ADDONS) ve ekranda görünen adı. */
+/** Agent'ın bildiği beş eklenti (agent/core/config.py KNOWN_ADDONS) ve ekranda görünen adı. */
 const ADDON_LABELS: readonly [string, string][] = [
   ["temperature", "Temperature"],
   ["swap", "Swap"],
   ["load_avg", "Load average"],
   ["gpu", "GPU"],
-  ["external_ip", "External IP"],
   ["crash_processes", "Crash processes"],
 ];
 
@@ -204,9 +203,6 @@ export function DetailPanel({
           />
           <Row label="Kernel" value={device.kernel_version ?? "—"} />
           <Row label="Booted" value={localDateTime(device.last_boot)} />
-          {device.external_ip && (
-            <Row label="External IP" value={device.external_ip} />
-          )}
         </Group>
 
         <Group title="AGENT">
@@ -222,7 +218,7 @@ export function DetailPanel({
           Eklentiler YALNIZCA OKUNUR. Değiştirme yolu bilerek yok: eklenti
           listesi config'te durur ve config insan sınırıdır (agent'a salt-okunur,
           §4.3). Dashboard'dan açılabilseydi hesap, makinedeki kişinin rızası
-          olmadan — özellikle external_ip'yi — açabilirdi. Karar: C kapsam dışı
+          olmadan açabilirdi. Karar: C kapsam dışı
           (bkz. md/memory/decisions.md). Bu yüzden panel neyin AÇIK olduğunu
           söylüyor ve nasıl değişeceğini açıkça yazıyor.
         */}

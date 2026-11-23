@@ -36,7 +36,6 @@ ADDON_TEMPERATURE = "temperature"
 ADDON_SWAP = "swap"
 ADDON_LOAD_AVG = "load_avg"
 ADDON_GPU = "gpu"
-ADDON_EXTERNAL_IP = "external_ip"
 ADDON_CRASH_PROCESSES = "crash_processes"
 
 KNOWN_ADDONS = (
@@ -44,7 +43,6 @@ KNOWN_ADDONS = (
     ADDON_SWAP,
     ADDON_LOAD_AVG,
     ADDON_GPU,
-    ADDON_EXTERNAL_IP,
     ADDON_CRASH_PROCESSES,
 )
 

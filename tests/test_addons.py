@@ -25,7 +25,6 @@ import pytest
 import agent
 from agent.core import metrics as metrics_module
 from agent.core.config import (
-    ADDON_EXTERNAL_IP,
     ADDON_GPU,
     ADDON_SWAP,
     ADDON_TEMPERATURE,
@@ -356,25 +355,6 @@ def test_gpu_model_enters_the_inventory_only_when_enabled(monkeypatch):
     assert collect_inventory(replace(BARE, enabled_addons=(ADDON_GPU,))).gpu_model == (
         "NVIDIA Test Card"
     )
-
-
-# --- external_ip: agent'ın göndermediği alan --------------------------------
-
-
-def test_the_agent_never_reports_its_own_external_ip():
-    """external_ip envanterde ALAN OLARAK YOK.
-
-    Cihazın kendi dış IP'sini bildirmesi, doğruluğu cihazın insafına bırakırdı:
-    bir agent istediği IP'yi yazabilirdi. Değeri, isteği gerçekten alan taraf
-    (collector) bağlantının kaynağından yazar.
-
-    Kullanıcının tercihi yine de agent'tan gider — enabled_addons listesiyle.
-    """
-    inventory = collect_inventory(ALL_ADDONS)
-
-    assert "external_ip" not in asdict(inventory)
-    # Tercih yine de gidiyor: collector'ın "yazayım mı" sorusunun cevabı burada.
-    assert ADDON_EXTERNAL_IP in inventory.enabled_addons
 
 
 # --- config: tanınmayan eklenti adı -----------------------------------------
