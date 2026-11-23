@@ -16,21 +16,13 @@ import Link from "next/link";
 import { deviceStatus, type Device } from "@/lib/devices";
 import { SERIES, type SeriesDef } from "@/lib/metrics";
 import { relativeTime } from "@/lib/time";
-import { percentTone } from "@/lib/alerts";
 import { StatusPill } from "@/components/StatusPill";
-import {
-  IconAlert,
-  IconChevron,
-  IconClock,
-  IconServer,
-} from "@/components/icons";
+import { IconChevron, IconClock, IconServer } from "@/components/icons";
 
 /*
- * Çubuğun rengi normalde ÖLÇÜNÜN rengi (CPU mor, RAM yeşil, Disk turuncu —
- * referans 2'nin dört kartı). Eşiğe yaklaşıldığında DURUM rengi devralıyor,
- * çünkü o noktada kullanıcının bilmesi gereken şey artık hangi ölçüye baktığı
- * değil, sorunun kendisi. Hesap lib/alerts.ts'te: aynı eşik Overview'daki
- * Host Status tablosunda ve Top Hosts çubuklarında da okunuyor.
+ * Çubuğun rengi her zaman ölçünün kendi rengidir (`series.tone.bar`); değer
+ * eşiğe ne kadar yakın olursa olsun renk değişmez. Yüzde değeri yazıyla
+ * gösterilir.
  */
 
 function Metric({
@@ -43,26 +35,23 @@ function Metric({
   value: string;
 }) {
   const clamped = percent == null ? null : Math.min(100, Math.max(0, percent));
-  const { bar, text, alarm } = percentTone(series, clamped);
 
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-muted">{series.label}</span>
-        <span className={`flex items-center gap-1 tabular-nums font-medium ${text}`}>
-          {/*
-            Uyarı üçgeni, çubuk rengine ek bir sinyal. Disk rengi (turuncu) ile
-            uyarı kehribarı yakın akraba; sinyal yalnızca çubuğa bırakılsaydı
-            "disk eşiğe yaklaştı" hâli, normal disk çubuğundan ayırt edilemezdi.
-          */}
-          {alarm && <IconAlert className="size-3.5 shrink-0" />}
+        <span
+          className={`tabular-nums font-medium ${
+            clamped == null ? "text-faint" : "text-fg"
+          }`}
+        >
           {value}
         </span>
       </div>
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-2">
         {clamped != null && (
           <div
-            className={`h-full rounded-full transition-[width] duration-700 ease-out ${bar}`}
+            className={`h-full rounded-full transition-[width] duration-700 ease-out ${series.tone.bar}`}
             style={{ width: `${clamped}%` }}
           />
         )}
