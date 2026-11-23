@@ -38,9 +38,8 @@ export type DeviceRow = {
   disk_total_mb: number | null;
   agent_version: string | null;
   /*
-   * Açılış anı. Listede DE gerekiyor: Overview'ın Host Status tablosunda
-   * "Uptime" sütunu var ve o sütun bu alandan türüyor. Yalnızca detayda
-   * tutulsaydı tablo cihaz başına ikinci bir sorgu açmak zorunda kalırdı.
+   * Açılış anı. Listede de okunuyor: Inventory sayfası ve cihaz detayındaki
+   * "Booted" satırı bu alandan türüyor.
    */
   last_boot: string | null;
   logging_enabled: boolean;

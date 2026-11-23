@@ -32,7 +32,7 @@ export default function LoginPage() {
   /*
    * Şifre kurtarma bağlantısı da bir OTURUM açar. Bu yüzden "oturum varsa
    * içeri al" kuralı burada olduğu gibi uygulanamaz: kullanıcı yeni şifresini
-   * seçemeden Overview'a fırlatılırdı.
+   * seçemeden cihaz listesine fırlatılırdı.
    *
    * İki yoldan da tespit ediliyor. Başlangıç değeri adresteki `type=recovery`
    * parçasını SENKRON okuyor — Supabase olayı ulaşana kadar geçen birkaç
@@ -57,7 +57,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     // "Bilmiyorum" hâlinde yönlendirme yok (useSession'ın üç ayrı durumu).
-    if (status === "signedIn" && !recovery) router.replace("/overview");
+    if (status === "signedIn" && !recovery) router.replace("/devices");
   }, [status, recovery, router]);
 
   /*

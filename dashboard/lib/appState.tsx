@@ -95,8 +95,8 @@ type AppValue = {
   /**
    * Elle yenilemede artan sayaç.
    *
-   * Cihaz listesi 10 saniyede bir kendiliğinden tazeleniyor ama Overview'ın
-   * grafiği ve son log listesi ayrı sorgular; onları da 10 saniyede bir
+   * Cihaz listesi 10 saniyede bir kendiliğinden tazeleniyor ama grafik ve
+   * log listesi ayrı sorgular; onları da 10 saniyede bir
    * çekmek, penceresi zaten DONDURULMUŞ (anchor) bir grafiği durmadan yeniden
    * indirmek olurdu. Bunun yerine yenile düğmesine bağlılar: `devices` dizisi
    * her turda yeni bir nesne olduğu için ona bağımlılık kurmak da aynı israfı
@@ -109,7 +109,7 @@ type AppValue = {
    * Yerini aldığı şey bir arama kutusuydu; referansta arama yok, seçici var.
    * Seçici aslında daha keskin: cihaz sayısı avuç içi kadar olduğu için
    * serbest metinle aramak, listeden seçmekten hiçbir zaman hızlı olmuyordu.
-   * Overview'da KPI'ları ve grafiği, cihaz listesinde kartları daraltıyor.
+   * Cihaz listesinde kartları daraltıyor.
    */
   hostFilter: string | null;
   setHostFilter: (id: string | null) => void;

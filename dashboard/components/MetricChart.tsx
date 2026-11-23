@@ -10,9 +10,7 @@
  * Tek çizim alanı, çizgiler ÜST ÜSTE. Y ekseni solda, kılavuzlar kesikli,
  * saat etiketleri altta. Gösterge (ChartLegend) çizim alanında DEĞİL, grafiğin
  * başlık bandında: çizgiler %90 üstüne çıkınca ya da kilitli grafikte sağ kenara
- * yaslanınca göstergenin altından geçip okunmaz hâle geliyordu. Overview'daki
- * geniş grafikle aynı dil — iki ekranın iki ayrı grafik dili konuşması marka
- * tutarlılığını bozardı (§9.11.1: "görsel dil birebir alınır").
+ * yaslanınca göstergenin altından geçip okunmaz hâle geliyordu.
  *
  * BANT (min–max) çizgilerin ARKASINDA soluk bir dolgu: §9.6 madde 6 kilitli —
  * yalnızca ortalama çizmek 5 saniyelik patlamayı yutar, yalnızca max çizmek

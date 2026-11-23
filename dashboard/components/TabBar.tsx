@@ -7,13 +7,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  IconHome,
   IconServer,
   IconSettings,
 } from "./icons";
 
 const TABS = [
-  { label: "Overview", href: "/overview", icon: IconHome, match: (p: string) => p === "/overview" },
   { label: "Hosts", href: "/devices", icon: IconServer, match: (p: string) => p.startsWith("/devices") },
 ];
 

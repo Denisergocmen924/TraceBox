@@ -132,10 +132,8 @@ const TICK_STEPS_MS = [
 ];
 
 /**
- * X ekseninin etiket anları. Overview'daki geniş grafik ile cihaz detayının
- * zaman çizelgesi BU fonksiyonu paylaşıyor: iki ayrı uygulama olsaydı aynı
- * pencereye bakan iki grafik farklı anlarda etiketlenir, kullanıcı ikisini
- * gözüyle hizalayamazdı.
+ * X ekseninin etiket anları. Zaman çizelgesindeki grafikler BU fonksiyonu
+ * paylaşıyor; aynı pencereye bakan grafikler aynı anlarda etiketleniyor.
  */
 export function axisTicks(
   fromMs: number,

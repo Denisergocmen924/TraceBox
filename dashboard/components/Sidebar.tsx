@@ -7,7 +7,7 @@
  * görselin aynen kopyalanmasını istedi (§9.11.1'in "birebir" kuralı); menü
  * artık referanstaki yedi öğe.
  *
- * İlk hâlde yalnızca ilk iki öğenin (Overview, Hosts) sayfası vardı; kalan beşi
+ * İlk hâlde yalnızca ilk iki öğenin sayfası vardı; kalan beşi
  * tıklanmayan `<span>` olarak duruyordu — var olmayan bir sayfaya href vermek
  * kullanıcıyı 404'e koşturmak olurdu. 2026-08-31'de beşinin de kendi sayfası
  * yazıldı ve pasif dal kaldırıldı: menünün tamamı artık gerçekten çalışıyor.
@@ -22,7 +22,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   IconClose,
-  IconHome,
   IconInventory,
   IconServer,
   IconSettings,
@@ -37,12 +36,6 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  {
-    label: "Overview",
-    icon: IconHome,
-    href: "/overview",
-    match: (p) => p === "/overview",
-  },
   {
     label: "Hosts",
     icon: IconServer,
