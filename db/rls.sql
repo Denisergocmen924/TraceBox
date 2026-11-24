@@ -4,9 +4,7 @@
 --
 -- ÇALIŞTIRMA SIRASI:  schema.sql  ->  triggers.sql  ->  [rls.sql]
 --
--- Bu dosya SIFIRDAN kurulum içindir. Zaten kurulmuş bir veritabanında yetki/politika
--- değiştirmek için db/migrations/ kullanılır; değişiklik İKİSİNE BİRDEN yazılır
--- (kural: db/migrations/README.md).
+-- Bu dosya SIFIRDAN kurulum içindir: yetki ve politikaların ŞU ANKİ halini anlatır.
 --
 -- İKİ AYRI YAZMA/OKUMA YOLU:
 --
@@ -236,7 +234,26 @@ grant  execute on function public.metrics_buckets(uuid, timestamptz, timestamptz
 --   2. Advisors -> Security -> "RLS disabled in public" uyarısı KALMAMALI.
 --   3. Gerçek test (M9, dashboard hazır olunca): iki test kullanıcısı aç,
 --      birinin oturumuyla diğerinin cihazlarını sorgula -> 0 satır dönmeli.
---   4. metrics_buckets fonksiyonu: prosecdef = false (SECURITY INVOKER) ve
---      anon'un execute yetkisi olmamalı. Sorgusu 0004_metrics_buckets.sql
---      dosyasının sonunda duruyor.
+--   4. metrics_buckets fonksiyonu: aşağıdaki sorgu TEK satır döndürür ve
+--      sütunlar şu değerleri taşır:
+--        security_definer       = false                 (true ise RLS atlanıyor)
+--        settings               = ["search_path=\"\""]   (boş search_path'in yazılışı)
+--        authenticated_execute  = true
+--        anon_execute           = false
+--        grants                 = içinde anon=X/... satırı yok
+--      settings'te `search_path=""` görünmesi beklenen budur: Postgres GUC
+--      değerlerini proconfig içinde tırnaklayarak saklar, boş dize `""` olur.
+--      grants sütunu proacl'ı ham haliyle gösterir; anon_execute yalnızca
+--      true/false der, yetkinin doğrudan bir grant'tan mı yoksa PUBLIC'ten mi
+--      geldiğini yalnızca bu liste ayırt eder.
 -- -----------------------------------------------------------------------------
+select p.proname,
+       p.prosecdef                                        as security_definer,
+       p.proconfig                                        as settings,
+       has_function_privilege('authenticated', p.oid, 'execute') as authenticated_execute,
+       has_function_privilege('anon',          p.oid, 'execute') as anon_execute,
+       p.proacl                                           as grants
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public'
+   and p.proname = 'metrics_buckets';

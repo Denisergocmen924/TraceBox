@@ -4,7 +4,7 @@
  * Buradaki tek büyük fikir: HAM VERİ İNMEZ. Agent 5 saniyede bir ölçüyor, yani
  * tek cihazda 10 gün ≈ 173.000 satır. Grafik ise ~1200 piksel geniş; satırların
  * neredeyse tamamı zaten çizilemez. Bu yüzden seyreltmeyi veritabanı yapıyor
- * (db/migrations/0004_metrics_buckets.sql): aralık ~1000 kovaya bölünür, her
+ * (db/schema.sql, `metrics_buckets`): aralık ~1000 kovaya bölünür, her
  * kovadan min / max / ortalama döner. Hangi aralığa bakılırsa bakılsın ekrana
  * aynı boyutta veri iner — 1 saat de 10 gün de aynı hızda açılır.
  *
@@ -33,9 +33,9 @@ export type MetricBucket = {
 } & AddonBucketFields;
 
 /**
- * Eklenti sütunları (migration 0006). Hepsi opsiyonel: 0006 çalıştırılmadıysa fonksiyon bunları döndürmez ve ek ölçü
- * grafikleri sessizce boş kalır, ekranın geri kalanı çalışır. Ön ek, lib/addons.ts
- * içindeki izlerin `prefix` alanıyla birebir aynı.
+ * Eklenti sütunları (sıcaklık, swap, load, GPU). Hepsi opsiyonel: fonksiyon
+ * bunları döndürmezse ek ölçü grafikleri sessizce boş kalır, ekranın geri kalanı
+ * çalışır. Ön ek, lib/addons.ts içindeki izlerin `prefix` alanıyla birebir aynı.
  */
 type Triplet<P extends string> = {
   [K in `${P}_min` | `${P}_max` | `${P}_avg`]?: number | null;
