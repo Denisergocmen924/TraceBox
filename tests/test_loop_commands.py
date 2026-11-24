@@ -1,13 +1,12 @@
 """
 agent/core/loop.py — komut turunun döngüye bağlanışı.
 
-Uygulama mantığı commands.py'de sınandı; buradaki soru farklı: **ack edilen
-id'ler state'te ne zaman durur, ne zaman düşer?**
+Uygulama mantığı commands.py'de sınandı; buradaki soru farklı: **poll turu
+state'e ne yazar ve ack'i ne zaman atar?**
 
-Bu, gözle görülmeyen bir muhasebedir. Yanlış tarafa kayarsa iki sessiz bozukluk
-üretir: id erken düşerse komut sunucuda sonsuza kadar `pending` kalır (dashboard
-"duraklatıldı" demez); geç düşerse agent aynı ack'i her gönderimde tekrar
-tekrar yollar. İkisinde de hata mesajı yok.
+Ack gitmezse agent bunu ayrıca kaydetmez: komut sunucuda `pending` kalır, bir
+sonraki poll'da yeniden gelir ve ack o turda tekrar denenir. Bu dosya o
+yeniden denemeyi (aynı komutun iki turda gelmesini) sınar.
 """
 
 from __future__ import annotations
@@ -65,89 +64,62 @@ def poll(poller, state, store, spool, shipper) -> bool:
     return loop._poll_commands(poller, CONFIG, state, store, spool, shipper)
 
 
-# --- state muhasebesi ------------------------------------------------------
+# --- ack ve state ----------------------------------------------------------
 
 
-def test_only_the_confirmed_ids_leave_the_state(store):
-    """"Listeyi boşalt" değil, "onaylananları çıkar".
-
-    Bugün fark görünmez (tek döngü var), ama kural yanlış yazılırsa ileride
-    gönderim sırasında uygulanan bir komutun ack'i sessizce yutulur.
-    """
-    state = store.load()
-    state.applied_command_ids = ["k1", "k2", "k3"]
-
-    loop._prune_acked(state, store, ["k2"])
-
-    assert state.applied_command_ids == ["k1", "k3"]
-    assert store.load().applied_command_ids == ["k1", "k3"], "değişiklik diske yazılmadı"
-
-
-def test_nothing_is_written_when_nothing_was_confirmed(store):
-    """Onay yoksa diske yazma da yok — her turda gereksiz fsync yapılmaz."""
-    state = store.load()
-    state.applied_command_ids = ["k1"]
-
-    loop._prune_acked(state, store, [])
-
-    assert state.applied_command_ids == ["k1"]
-    assert not store.path.exists()
-
-
-def test_an_acked_command_leaves_no_debt_behind(store, spool):
-    """Olağan akış: komut uygulanır, hemen ack'lenir ve state temiz kalır."""
+def test_an_applied_command_is_acked_and_the_state_is_saved(store, spool):
+    """Olağan akış: komut uygulanır, durum diske yazılır ve ack hemen atılır."""
     state = store.load()
     shipper = FakeShipper()
 
     poll(FakePoller([Command(id="k1", type="pause")]), state, store, spool, shipper)
 
     assert state.logging_enabled is False
+    assert store.load().logging_enabled is False
     assert shipper.calls == [["k1"]]
-    assert state.applied_command_ids == []
-    assert store.load().applied_command_ids == []
 
 
-def test_an_unconfirmed_ack_stays_in_the_state_for_the_next_send(store, spool):
-    """Ack ulaşmadıysa id state'te KALIR ve sonraki gönderime piggyback olur.
-
-    Kalmazsa komut hiç bildirilmemiş olur: sunucu onu her poll'da yeniden verir,
-    `devices.logging_enabled` kopyası hiç güncellenmez.
-    """
-    state = store.load()
-
-    poll(FakePoller([Command(id="k1", type="pause")]), state, store, spool, FakeShipper(ok=False))
-
-    assert state.applied_command_ids == ["k1"]
-    assert store.load().applied_command_ids == ["k1"], "borç diske yazılmadı"
-
-
-def test_a_redelivered_command_is_acked_again_without_being_listed_twice(store, spool):
+def test_a_failed_ack_is_retried_when_the_command_comes_again(store, spool):
     """Bu dosyanın en kritik testi.
 
-    Komutun tekrar gelmesi ack'in ulaşmadığı anlamına gelir; ack yeniden
-    denenmelidir. Ama id state'e İKİNCİ kez yazılmamalıdır — yazılsaydı liste
-    her turda büyür ve aynı id gönderimde defalarca tekrarlanırdı.
+    Ack ulaşmazsa agent bir şey kaydetmez; sunucu komutu yeniden verir. Tekrar
+    gelen komut durumu değiştirmez ama ack yeniden denenir — denenmezse komut
+    sunucuda sonsuza kadar `pending` kalır ve dashboard duraklatılmış cihazı
+    "çalışıyor" gösterir.
     """
     state = store.load()
-    state.logging_enabled = False
-    state.applied_command_ids = ["k1"]
     shipper = FakeShipper(ok=False)
+    command = Command(id="k1", type="pause")
+
+    poller = FakePoller([command], [command])
+
+    poll(poller, state, store, spool, shipper)
+    poll(poller, state, store, spool, shipper)
+
+    assert state.logging_enabled is False
+    assert shipper.calls == [["k1"], ["k1"]]
+
+
+def test_a_repeated_command_does_not_rewrite_the_state(store, spool):
+    """Durumu değiştirmeyen tekrar komutu diske yazmaz; yalnızca ack atılır."""
+    state = store.load()
+    state.logging_enabled = False
+    shipper = FakeShipper()
 
     poll(FakePoller([Command(id="k1", type="pause")]), state, store, spool, shipper)
 
-    assert shipper.calls == [["k1"]], "tekrar gelen komut yeniden ack edilmedi"
-    assert state.applied_command_ids == ["k1"], "aynı id listeye iki kez yazıldı"
+    assert shipper.calls == [["k1"]]
+    assert not store.path.exists()
 
 
-def test_an_unknown_command_creates_no_debt(store, spool):
-    """Uygulanmayan komut ack edilmez, dolayısıyla state'e de girmez."""
+def test_an_unknown_command_is_not_acked(store, spool):
+    """Uygulanmayan komut ack edilmez; komut kuyrukta bekler."""
     state = store.load()
     shipper = FakeShipper()
 
     poll(FakePoller([Command(id="k9", type="reboot")]), state, store, spool, shipper)
 
     assert shipper.calls == []
-    assert state.applied_command_ids == []
 
 
 # --- turun döngüye etkisi --------------------------------------------------
@@ -198,58 +170,3 @@ def test_a_postponed_delete_lets_the_loop_continue(store, spool):
 
     assert stopped is False
     assert store.is_deleted() is False
-
-
-# --- normal gönderime binen ack'ler ----------------------------------------
-
-
-class FakeSender:
-    """`send_pending` sonucunu testin verdiği şekilde döndüren sahte shipper."""
-
-    def __init__(self, result: SendResult) -> None:
-        self._result = result
-        self.backoff_seconds = 0.0
-        self.seen: list[list[str]] = []
-
-    def send_pending(self, config, applied_command_ids: list[str]) -> SendResult:
-        self.seen.append(list(applied_command_ids))
-        return self._result
-
-
-def test_acks_that_ride_along_with_a_normal_send_leave_the_state(store, spool):
-    """Ack'in ikinci yolu: `POST /ingest` gövdesine binmek (CLAUDE.md §4.2).
-
-    Ack'ler oraya da bindiği için düşme kuralı iki yerde birden geçerlidir;
-    yalnızca poll tarafında uygulanırsa id'ler sonsuza kadar her gövdede
-    tekrarlanır.
-    """
-    state = store.load()
-    state.applied_command_ids = ["k1", "k2"]
-
-    loop._send_spool(
-        FakeSender(SendResult(ok=True, sent=2, acked=["k1"])), CONFIG, state, store, spool
-    )
-
-    assert state.applied_command_ids == ["k2"]
-
-
-def test_acks_confirmed_before_a_failure_still_leave_the_state(store, spool):
-    """Tur yarıda kalsa bile ilk isteğin ack'i onaylanmıştır.
-
-    Ack'ler yalnızca ilk isteğe biner; o istek 200 aldıysa komutlar sunucuda
-    `applied` olmuştur. Sonraki batch'in hatası bunu geri almaz — id'ler yine
-    düşer, yoksa bir daha hiç bildirilmeyecek komutlar için sonsuza kadar
-    taşınırlar.
-    """
-    state = store.load()
-    state.applied_command_ids = ["k1"]
-
-    loop._send_spool(
-        FakeSender(SendResult(ok=False, sent=2, detail="HTTP 500", acked=["k1"])),
-        CONFIG,
-        state,
-        store,
-        spool,
-    )
-
-    assert state.applied_command_ids == []

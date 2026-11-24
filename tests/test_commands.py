@@ -48,11 +48,7 @@ class FakeShipper:
             self._on_send()
 
         ok = self._outcomes.pop(0) if self._outcomes else True
-        return SendResult(
-            ok=ok,
-            detail="" if ok else "HTTP 500",
-            acked=list(command_ids) if ok else [],
-        )
+        return SendResult(ok=ok, detail="" if ok else "HTTP 500")
 
 
 @pytest.fixture
@@ -311,28 +307,31 @@ def test_applied_commands_are_acked_right_away(messages):
     """Ack telemetriye bağlanmaz — pause hâlinde gönderim durur, ack durmaz."""
     shipper = FakeShipper()
 
-    confirmed = commands_module.ack_now(
-        ["k1", "k2"], config=CONFIG, shipper=shipper, log=messages.append
-    )
+    commands_module.ack_now(["k1", "k2"], config=CONFIG, shipper=shipper, log=messages.append)
 
     assert shipper.calls == [["k1", "k2"]]
-    assert confirmed == ["k1", "k2"]
 
 
 def test_nothing_is_acked_when_there_is_nothing_to_ack(messages):
     shipper = FakeShipper()
 
-    assert commands_module.ack_now([], config=CONFIG, shipper=shipper, log=messages.append) == []
+    commands_module.ack_now([], config=CONFIG, shipper=shipper, log=messages.append)
+
     assert shipper.calls == []
 
 
-def test_a_failed_ack_confirms_nothing(messages):
-    """Başarısız ack'te id'ler state'te kalır ve sonraki gönderime piggyback olur."""
-    confirmed = commands_module.ack_now(
-        ["k1"], config=CONFIG, shipper=FakeShipper(False), log=messages.append
-    )
+def test_a_failed_ack_is_left_to_the_redelivery(messages):
+    """Ack gitmezse ayrıca bir şey kaydedilmez: komut sunucuda `pending` kalır.
 
-    assert confirmed == []
+    Sunucu komutu bir sonraki poll'da yeniden verir ve agent ack'i o turda
+    tekrar dener; hata yalnızca log'a düşer.
+    """
+    shipper = FakeShipper(False)
+
+    commands_module.ack_now(["k1"], config=CONFIG, shipper=shipper, log=messages.append)
+
+    assert shipper.calls == [["k1"]]
+    assert any("redelivered" in line for line in messages)
 
 
 # --- delete ---------------------------------------------------------------

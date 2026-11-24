@@ -74,7 +74,7 @@ def test_records_leave_the_spool_only_after_a_200(spool):
     fill(spool, 3)
     shipper = make_shipper(spool, FakeCollector(200))
 
-    result = shipper.send_pending(CONFIG, [])
+    result = shipper.send_pending(CONFIG)
 
     assert result.ok is True
     assert result.sent == 3
@@ -88,7 +88,7 @@ def test_request_carries_the_device_key_and_grouped_payload(spool):
     collector = FakeCollector(200)
     shipper = make_shipper(spool, collector)
 
-    shipper.send_pending(CONFIG, [])
+    shipper.send_pending(CONFIG)
 
     [request] = collector.requests
     assert str(request.url) == "https://collector.test/ingest"
@@ -105,7 +105,7 @@ def test_server_error_leaves_every_record_in_the_spool(spool):
     fill(spool, 3)
     shipper = make_shipper(spool, FakeCollector(500))
 
-    result = shipper.send_pending(CONFIG, [])
+    result = shipper.send_pending(CONFIG)
 
     assert result.ok is False
     assert result.sent == 0
@@ -117,7 +117,7 @@ def test_connection_failure_leaves_every_record_in_the_spool(spool):
     fill(spool, 3)
     shipper = make_shipper(spool, FakeCollector(httpx.ConnectError("bağlantı yok")))
 
-    result = shipper.send_pending(CONFIG, [])
+    result = shipper.send_pending(CONFIG)
 
     assert result.ok is False
     assert spool.count() == 3
@@ -133,7 +133,7 @@ def test_rejected_key_leaves_every_record_in_the_spool(spool):
     fill(spool, 3)
     shipper = make_shipper(spool, FakeCollector(401))
 
-    result = shipper.send_pending(CONFIG, [])
+    result = shipper.send_pending(CONFIG)
 
     assert result.ok is False
     assert spool.count() == 3
@@ -150,7 +150,7 @@ def test_only_the_confirmed_batch_leaves_the_spool(spool, monkeypatch):
     fill(spool, 5)
     shipper = make_shipper(spool, FakeCollector(200, 500))
 
-    result = shipper.send_pending(CONFIG, [])
+    result = shipper.send_pending(CONFIG)
 
     assert result.ok is False
     # İlk iki kayıt onaylandı ve düştü; kalan üçü ikinci isteğin hatasıyla yerinde kaldı.
@@ -158,24 +158,23 @@ def test_only_the_confirmed_batch_leaves_the_spool(spool, monkeypatch):
     assert [record.uuid for record in spool.take(10)] == ["kayit-2", "kayit-3", "kayit-4"]
 
 
-def test_command_acks_travel_only_in_the_first_request(spool, monkeypatch):
-    """Komut ack'leri ilk isteğe binerse yeter — sonraki batch'lerde tekrarlanmaz."""
-    monkeypatch.setattr("agent.core.shipper.BATCH_ROWS", 2)
-    fill(spool, 4)
-    collector = FakeCollector(200, 200)
+def test_spool_send_carries_no_command_acks(spool):
+    """Spool gönderimi ack taşımaz; ack'ler yalnızca `send_acks` ile gider."""
+    fill(spool, 1)
+    collector = FakeCollector(200)
     shipper = make_shipper(spool, collector)
 
-    shipper.send_pending(CONFIG, ["komut-1"])
+    shipper.send_pending(CONFIG)
 
-    assert [body["applied_command_ids"] for body in collector.bodies] == [["komut-1"], []]
+    assert [body["applied_command_ids"] for body in collector.bodies] == [[]]
 
 
 def test_nothing_is_sent_when_there_is_nothing_to_send(spool):
-    """Spool boş ve ack yoksa hiç istek atılmaz — boş gövde göndermenin karşılığı yok."""
+    """Spool boşsa hiç istek atılmaz — boş gövde göndermenin karşılığı yok."""
     collector = FakeCollector()
     shipper = make_shipper(spool, collector)
 
-    result = shipper.send_pending(CONFIG, [])
+    result = shipper.send_pending(CONFIG)
 
     assert result.ok is True
     assert result.sent == 0
@@ -189,7 +188,7 @@ def test_backoff_doubles_after_each_failure(spool):
 
     measured = []
     for _ in range(3):
-        shipper.send_pending(CONFIG, [])
+        shipper.send_pending(CONFIG)
         measured.append(shipper.backoff_seconds)
 
     assert measured == [10.0, 20.0, 40.0]
@@ -203,7 +202,7 @@ def test_backoff_stops_growing_at_the_ceiling(spool):
     shipper = make_shipper(spool, FakeCollector(*([500] * 12)))
 
     for _ in range(12):
-        shipper.send_pending(CONFIG, [])
+        shipper.send_pending(CONFIG)
 
     assert shipper.backoff_seconds == 300.0
 
@@ -213,10 +212,10 @@ def test_success_clears_the_backoff(spool):
     fill(spool, 1)
     shipper = make_shipper(spool, FakeCollector(500, 200))
 
-    shipper.send_pending(CONFIG, [])
+    shipper.send_pending(CONFIG)
     assert shipper.backoff_seconds == 10.0
 
-    shipper.send_pending(CONFIG, [])
+    shipper.send_pending(CONFIG)
 
     assert shipper.backoff_seconds == 0.0
     assert shipper.ready() is True
@@ -237,50 +236,6 @@ def test_inventory_is_confirmed_only_by_a_200(spool):
 # --- Komut ack'leri --------------------------------------------------------
 
 
-def test_confirmed_acks_are_reported_back(spool):
-    """200 alınan ack'ler sonuçta bildirilir; çağıran onları state'ten düşer.
-
-    Bildirilmezlerse id'ler state'te kalır ve her gönderimde tekrar tekrar
-    gönderilir — sunucu onları çoktan `applied` yapmışken.
-    """
-    fill(spool, 1)
-    shipper = make_shipper(spool, FakeCollector(200))
-
-    assert shipper.send_pending(CONFIG, ["komut-1"]).acked == ["komut-1"]
-
-
-def test_acks_are_not_reported_when_the_request_fails(spool):
-    """İstek başarısızsa ack onaylanmış sayılmaz.
-
-    Sayılsaydı id state'ten düşer, sunucuya hiç ulaşmaz ve komut sonsuza kadar
-    `pending` kalırdı: her poll'da yeniden gelir, agent'ın uyguladığı hiç
-    bilinmezdi.
-    """
-    fill(spool, 1)
-    shipper = make_shipper(spool, FakeCollector(500))
-
-    result = shipper.send_pending(CONFIG, ["komut-1"])
-
-    assert result.ok is False
-    assert result.acked == []
-
-
-def test_acks_confirmed_by_the_first_batch_survive_a_later_failure(spool, monkeypatch):
-    """Tur yarıda kalsa bile ilk isteğin ack'i onaylanmıştır.
-
-    Ack'ler yalnızca ilk isteğe biner; o istek 200 aldıysa komutlar sunucuda
-    `applied` olmuştur. Sonraki batch'in hatası bu gerçeği geri almaz.
-    """
-    monkeypatch.setattr("agent.core.shipper.BATCH_ROWS", 2)
-    fill(spool, 5)
-    shipper = make_shipper(spool, FakeCollector(200, 500))
-
-    result = shipper.send_pending(CONFIG, ["komut-1"])
-
-    assert result.ok is False
-    assert result.acked == ["komut-1"]
-
-
 def test_ack_only_request_carries_no_measurements(spool):
     """send_acks bir KONTROL mesajıdır: gövdesinde tek ölçüm satırı yoktur.
 
@@ -294,7 +249,6 @@ def test_ack_only_request_carries_no_measurements(spool):
     result = shipper.send_acks(CONFIG, ["komut-1", "komut-2"])
 
     assert result.ok is True
-    assert result.acked == ["komut-1", "komut-2"]
     assert collector.bodies == [
         {
             "metrics": [],
@@ -323,4 +277,3 @@ def test_failed_ack_only_request_confirms_nothing(spool):
     result = shipper.send_acks(CONFIG, ["komut-1"])
 
     assert result.ok is False
-    assert result.acked == []

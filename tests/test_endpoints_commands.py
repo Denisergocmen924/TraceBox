@@ -117,7 +117,7 @@ def poll(client):
 
 
 def ack(client, *command_ids, **body):
-    """POST /ingest — ack piggyback. Gövde varsayılanı boş bir gönderimdir."""
+    """POST /ingest — ack gövdesi. Gövde varsayılanı boş bir gönderimdir."""
     return client.post(
         "/ingest", json={"applied_command_ids": list(command_ids), **body}
     )

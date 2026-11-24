@@ -52,7 +52,7 @@ class Command:
 class CommandResult:
     """Bir poll turunun sonucu.
 
-    `applied_ids`: ack'lenmeyi bekleyen YENİ id'ler.
+    `applied_ids`: bu turda ack'lenecek id'ler (tekrar gelen komutunki de dahil).
     `state_changed`: state.json diske yazılmalı mı.
     `deleted`: cihaz kaydı silindi, agent duracak.
     """
@@ -150,8 +150,9 @@ def apply_commands(commands, *, config, state, store, spool, shipper, log) -> Co
                 # idempotent: durum zaten istenen değerde.
                 log(f"[cmd] {command.type} was already applied — retrying the ack")
 
-            # Zaten ack listesinde olsa bile buraya yazılır: komutun tekrar
-            # gelmesi ack'in ulaşmadığı anlamına gelir, yani tekrar denenmeli.
+            # Tekrar gelen komutun id'si de yazılır: komutun tekrar gelmesi
+            # ack'in ulaşmadığı anlamına gelir, yani tekrar denenmeli. Aynı id
+            # bir turda iki kez gelirse listeye bir kez girer.
             if command.id not in applied:
                 applied.append(command.id)
             continue
@@ -165,32 +166,27 @@ def apply_commands(commands, *, config, state, store, spool, shipper, log) -> Co
     return CommandResult(applied_ids=applied, state_changed=state_changed)
 
 
-def ack_now(applied_ids: list[str], *, config, shipper, log) -> list[str]:
-    """Uygulanan komutları hemen ack'ler; onaylanan id'leri döndürür.
+def ack_now(applied_ids: list[str], *, config, shipper, log) -> None:
+    """Uygulanan komutları hemen ack'ler.
 
-    Normalde ack'ler `POST /ingest` gövdesine biner (§4.2) — ama pause hâlinde
-    gönderim durur ve o gövde hiç yola çıkmaz. Ack de gitmezse sunucu komutu
-    her poll'da yeniden verir ve `devices.logging_enabled` kopyası hiç
-    güncellenmez, yani dashboard cihazı hâlâ "çalışıyor" gösterir.
+    Ack, `POST /ingest`'e kendi küçük isteğiyle gider ve ölçüm kayıtlarına
+    bağlanmaz: pause hâlinde gönderim durur, ack durmaz. Ack gitmezse sunucu
+    komutu `pending` bırakır ve bir sonraki poll'da yeniden verir; uygulama
+    idempotent olduğu için agent ack'i o turda tekrar dener. Yani başarısızlık
+    için ayrıca bir kayıt tutulmaz.
 
-    Bu yüzden ack telemetriye bağlanmaz: uygulanan bir komut, gönderim açık da
-    kapalı da olsa kendi küçük isteğiyle bildirilir. Bu bir KONTROL mesajıdır
-    (spec'in `delete` ack'i için tanıdığı istisnanın aynı gerekçesi), ölçüm
-    değil — gövdesinde tek bir ölçüm satırı bile yok.
-
-    Başarısız olursa id'ler state'te kalır ve bir sonraki gönderime piggyback
-    olur; kayıp yok, yalnızca gecikme.
+    Bu bir KONTROL mesajıdır, ölçüm değil — gövdesinde tek bir ölçüm satırı
+    bile yok.
     """
     if not applied_ids:
-        return []
+        return
 
     result = shipper.send_acks(config, applied_ids)
     if not result.ok:
-        log(f"[cmd] could not send ack: {result.detail} — deferred to the next ship")
-        return []
+        log(f"[cmd] could not send ack: {result.detail} — the command will be redelivered")
+        return
 
     log(f"[cmd] acked {len(applied_ids)} command(s)")
-    return list(applied_ids)
 
 
 def _delete(command, *, config, store, spool, shipper, log) -> bool:

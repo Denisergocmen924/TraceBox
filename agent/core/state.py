@@ -59,10 +59,6 @@ class State:
     # state'te durur — yoksa her açılışta dolu bir disk yeniden flush ederdi.
     disk_flush_mark: float | None = None
 
-    # Uygulanmış ama collector tarafından henüz 200 ile onaylanmamış komut id'leri.
-    # Sonraki /ingest gövdesinde ack olarak gider (M6).
-    applied_command_ids: list[str] = field(default_factory=list)
-
 
 def state_dir() -> Path:
     """Kullanılacak çalışma dizinini döndürür."""
