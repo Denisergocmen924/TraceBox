@@ -114,9 +114,8 @@ class IngestIn(_Payload):
     crash_snapshots: Annotated[
         list[CrashSnapshotIn], Field(max_length=MAX_ROWS_PER_TABLE)
     ] = Field(default_factory=list)
-    # Uygulanmış komutların id'leri (ack). Ayrı bir uç yerine bu gövdeye
-    # binerler: agent zaten düzenli olarak buraya istek atıyor, ack için ikinci
-    # bir tur açmak boşuna trafik olurdu.
+    # Uygulanmış komutların id'leri (ack). Agent bunları, ölçüm kaydı taşımayan
+    # kendi küçük isteğiyle yollar.
     applied_command_ids: Annotated[
         list[UUID], Field(max_length=MAX_ROWS_PER_TABLE)
     ] = Field(default_factory=list)

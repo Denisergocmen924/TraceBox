@@ -121,13 +121,13 @@ class FakeShipper:
         self._ready = ready
         self._ok = ok
         self.backoff_seconds = 0.0 if ready else 30.0
-        self.calls: list[list[str]] = []
+        self.calls: list = []
 
     def ready(self) -> bool:
         return self._ready
 
-    def send_pending(self, config, applied_command_ids: list[str]) -> SendResult:
-        self.calls.append(list(applied_command_ids))
+    def send_pending(self, config) -> SendResult:
+        self.calls.append(config)
         return SendResult(ok=self._ok, sent=1, detail="" if self._ok else "HTTP 500")
 
 
@@ -578,9 +578,9 @@ def test_snapshot_enters_the_spool_before_the_send(store, spool):
     shipper = FakeShipper()
     original = shipper.send_pending
 
-    def record_then_send(config, applied_command_ids):
+    def record_then_send(config):
         seen.append(len(crash_records(spool)))
-        return original(config, applied_command_ids)
+        return original(config)
 
     shipper.send_pending = record_then_send
 

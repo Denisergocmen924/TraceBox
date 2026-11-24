@@ -199,22 +199,6 @@ def _collect_logs(
     return [record for record in records if record.level in URGENT_LEVELS]
 
 
-def _prune_acked(state: State, store: StateStore, acked: list[str]) -> None:
-    """Onaylanan komut id'lerini state'ten düşer.
-
-    "Listeyi boşalt" DEĞİL, "onaylananları çıkar": aradaki fark bugün görünmez
-    (tek döngü var, gönderim sırasında yeni komut uygulanamaz) ama kural
-    bugünden doğru yazılırsa ileride bozulmaz.
-    """
-    if not acked:
-        return
-
-    remaining = [value for value in state.applied_command_ids if value not in set(acked)]
-    if remaining != state.applied_command_ids:
-        state.applied_command_ids = remaining
-        store.save(state)
-
-
 def _poll_commands(
     poller: CommandPoller,
     config: Config,
@@ -254,20 +238,10 @@ def _poll_commands(
     if result.deleted:
         return True
 
-    # Zaten listede olan id yeniden eklenmez; ack denemesi yine de yapılır,
-    # çünkü sunucu ack'i görene kadar aynı komutu vermeye devam eder.
-    new_ids = [value for value in result.applied_ids if value not in state.applied_command_ids]
-    if new_ids:
-        state.applied_command_ids.extend(new_ids)
-
-    if result.state_changed or new_ids:
+    if result.state_changed:
         store.save(state)
 
-    _prune_acked(
-        state,
-        store,
-        commands_module.ack_now(result.applied_ids, config=config, shipper=shipper, log=_log),
-    )
+    commands_module.ack_now(result.applied_ids, config=config, shipper=shipper, log=_log)
     return False
 
 
@@ -290,11 +264,7 @@ def _send_spool(
     shipper: Shipper, config: Config, state: State, store: StateStore, spool: Spool
 ) -> None:
     """Spool'u gönderir; başarılıysa last_send'i günceller."""
-    result = shipper.send_pending(config, state.applied_command_ids)
-
-    # Onaylanan ack'ler gönderim yarıda kalsa bile düşer: ilk istek 200 almış
-    # olabilir, o id'ler artık sunucuda `applied`.
-    _prune_acked(state, store, result.acked)
+    result = shipper.send_pending(config)
 
     if not result.ok:
         _log(
