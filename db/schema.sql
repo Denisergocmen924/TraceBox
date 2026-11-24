@@ -3,9 +3,8 @@
 -- 6 tablo, indeksler, foreign key'ler ve grafik seyreltme fonksiyonu.
 --
 -- Bu dosya SIFIRDAN kurulum içindir: tabloların ŞU ANKİ halini anlatır ve boş bir
--- veritabanına çalıştırılır. Zaten kurulmuş bir veritabanını güncellemek için
--- db/migrations/ kullanılır. Şema değişince İKİSİ BİRDEN güncellenir —
--- kural: db/migrations/README.md.
+-- veritabanına çalıştırılır. Şemanın tek kaynağı bu dosyadır (yetkiler için
+-- rls.sql, trigger'lar için triggers.sql).
 --
 -- accounts.id ile auth.users.id aynı UUID'dir; RLS politikaları bu sayede
 -- doğrudan "account_id = auth.uid()" karşılaştırmasına iner.
@@ -102,7 +101,7 @@ create table devices (
   -- Silme akışının ara durumu ("emir verildi, cihaz henüz duymadı") burada
   -- bir bayrakla tutulmuyor: bilgi `commands` tablosunda zaten var —
   -- type='delete' ve status='pending' olan satır. Satırı, agent komutu
-  -- uygulayıp ack'ledikten sonra collector siler (migration 0003).
+  -- uygulayıp ack'ledikten sonra collector siler.
 
   created_at          timestamptz not null default now()
 );

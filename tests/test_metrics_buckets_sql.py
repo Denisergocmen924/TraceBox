@@ -1,8 +1,8 @@
 """
-db/migrations/0004_metrics_buckets.sql — sözleşme testleri.
+db/schema.sql ve db/rls.sql — `metrics_buckets` sözleşme testleri.
 
 Fonksiyon burada ÇALIŞTIRILAMAZ: canlı bir Postgres ve içinde veri ister; test
-ortamında ikisi de yok. Gerçekten doğru sonuç ürettiği Supabase'de, dosyanın
+ortamında ikisi de yok. Gerçekten doğru sonuç ürettiği Supabase'de, rls.sql'in
 sonundaki doğrulama sorgusuyla kontrol edilir.
 
 Buradaki testler farklı bir soruya bakar: dosya SÖZLEŞMESİNİ hâlâ tutuyor mu?
@@ -32,7 +32,6 @@ import pytest
 
 DB = Path(__file__).resolve().parent.parent / "db"
 
-MIGRATION = DB / "migrations" / "0004_metrics_buckets.sql"
 SCHEMA = DB / "schema.sql"
 RLS = DB / "rls.sql"
 
@@ -65,11 +64,6 @@ def read(path: Path) -> str:
 
 
 @pytest.fixture(scope="module")
-def migration() -> str:
-    return read(MIGRATION)
-
-
-@pytest.fixture(scope="module")
 def rls() -> str:
     return read(RLS)
 
@@ -95,28 +89,23 @@ def body(sql: str) -> str:
     return definition(sql).split("$$")[1]
 
 
-# Fonksiyon tanımı İKİ dosyada birden durur: migration (mevcut veritabanını
-# değiştiren adım) ve schema.sql (sıfırdan kurulumun anlattığı son hal).
-# Kural: db/migrations/README.md. Aşağıdaki tanım testleri ikisine de koşar —
-# birine yazılıp diğerine yazılmayan bir değişiklik burada yakalanır.
-DEFINITION_FILES = [MIGRATION, SCHEMA]
-
-# Yetki satırları da iki dosyada: migration ve rls.sql.
-GRANT_FILES = [MIGRATION, RLS]
+# Fonksiyon tanımı schema.sql'de, yetki satırları rls.sql'de durur.
+DEFINITION_FILES = [SCHEMA]
+GRANT_FILES = [RLS]
 
 
 # --- Dosyalar --------------------------------------------------------------
 
 
-@pytest.mark.parametrize("path", [MIGRATION, SCHEMA, RLS])
+@pytest.mark.parametrize("path", [SCHEMA, RLS])
 def test_file_exists(path):
-    """Üçü de olmalı: migration mevcut veritabanını, diğer ikisi sıfırdan kurulumu anlatır."""
+    """Fonksiyon tanımı schema.sql'de, yetkileri rls.sql'de durur."""
     assert path.is_file()
 
 
 @pytest.mark.parametrize("path", DEFINITION_FILES, ids=lambda p: p.name)
 def test_function_is_defined(path):
-    """Tanım hem migration'da hem schema.sql'de bulunmalı (iki dosya kuralı)."""
+    """Tanım schema.sql'de bulunmalı."""
     assert definition(read(path))
 
 
@@ -208,7 +197,7 @@ def test_grant_signature_matches_the_function_parameters(path):
     """Yetki satırları imzayla eşleşmeli.
 
     Fonksiyona parametre eklenip bu satırlar güncellenmezse revoke/grant var
-    olmayan bir overload'a bakar: migration hata verir ya da yetki hiç değişmez.
+    olmayan bir overload'a bakar: yetki satırı hata verir ya da yetki hiç değişmez.
     """
     signatures = re.findall(
         rf"on\s+function\s+public\.{FUNC}\s*\(([^)]*)\)", read(path)
@@ -228,7 +217,7 @@ def test_declared_parameters_match_the_grant_signature():
     """
     match = re.search(
         rf"function\s+public\.{FUNC}\s*\((.*?)\)\s*returns",
-        read(MIGRATION),
+        read(SCHEMA),
         re.DOTALL,
     )
     assert match, "fonksiyon parametre listesi bulunamadı"
@@ -313,49 +302,24 @@ def test_function_is_declared_stable(path):
     assert re.search(r"\bstable\b", header(read(path)))
 
 
-# --- Migration hijyeni -----------------------------------------------------
+# --- Doğrulama sorgusu ----------------------------------------------------
 
 
-def test_verification_query_reads_the_security_setting(migration):
-    """Dosya sonundaki doğrulama sorgusu prosecdef'e bakmalı — false beklenir.
-
-    `if not exists` yalnızca ADA bakar, ŞEKLE bakmaz; doğrulama sorgusu bu
-    boşluğu kapatan şeydir (db/migrations/README.md).
-    """
-    assert "prosecdef" in migration
+def test_verification_query_reads_the_security_setting(rls):
+    """rls.sql'deki doğrulama sorgusu prosecdef'e bakmalı — false beklenir."""
+    assert "prosecdef" in rls
 
 
-def test_verification_query_checks_that_anon_cannot_execute(migration):
+def test_verification_query_checks_that_anon_cannot_execute(rls):
     """Yetkinin gerçekten daraldığı canlıda görülmeli, varsayılmamalı."""
-    assert re.search(
-        r"has_function_privilege\s*\(\s*'anon'", migration.replace("\n", " ")
-    )
+    assert re.search(r"has_function_privilege\s*\(\s*'anon'", rls.replace("\n", " "))
 
 
-def test_verification_query_shows_who_actually_holds_execute(migration):
+def test_verification_query_shows_who_actually_holds_execute(rls):
     """proacl ham yetki listesini gösterir — yetkinin NEREDEN geldiğini söyleyen tek şey.
 
     has_function_privilege yalnızca true/false der. 2026-08-30'da anon_execute
     true döndüğünde, sebebin PUBLIC devri mi yoksa doğrudan bir grant mı olduğunu
     ayırt edecek bilgi ekranda yoktu; proacl o boşluğu kapatıyor.
     """
-    assert "proacl" in migration
-
-
-def test_rollback_exists_but_only_as_a_comment():
-    """Geri alma bilgisi kaybolmasın ama kazayla çalışmasın.
-
-    `drop function` ham metinde var, yorumları ayıklanmış kodda YOK.
-    """
-    raw = MIGRATION.read_text(encoding="utf-8")
-    # [-\s]* : ifade iki yoruma bölünmüş -> aradaki satır sonu ve `--` atlanır.
-    assert re.search(rf"drop\s+function\s+if\s+exists[-\s]*public\.{FUNC}", raw)
-    assert "drop function" not in code(raw)
-
-
-def test_migration_documents_what_why_and_when():
-    """Başlıkta NE / NEDEN / TARİH bulunur — `create function` satırını herkes okur,
-    neden yazıldığının cevabı yalnızca yazanın kafasındadır."""
-    raw = MIGRATION.read_text(encoding="utf-8")
-    for heading in ("NE:", "NEDEN:", "TARİH:"):
-        assert heading in raw
+    assert "proacl" in rls

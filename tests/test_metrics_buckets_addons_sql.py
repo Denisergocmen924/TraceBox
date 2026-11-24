@@ -1,9 +1,8 @@
 """
-db/migrations/0006_metrics_buckets_addons.sql — eklenti sütunlarının sözleşmesi.
+db/schema.sql — `metrics_buckets` eklenti sütunlarının sözleşmesi.
 
 Genel güvenlik sözleşmesi (INVOKER, search_path, revoke/grant) test_metrics_buckets_sql.py'de;
-burada yalnızca 0006'nın eklediği şey korunuyor: her eklenti ölçüsü min / max / avg üçlüsüyle
-dönmeli ve migration ile schema.sql aynı sütun kümesini söylemeli.
+burada yalnızca eklenti ölçüleri korunuyor: her biri min / max / avg üçlüsüyle dönmeli.
 """
 import re
 from pathlib import Path
@@ -11,7 +10,6 @@ from pathlib import Path
 import pytest
 
 DB = Path(__file__).resolve().parent.parent / "db"
-MIGRATION = DB / "migrations" / "0006_metrics_buckets_addons.sql"
 SCHEMA = DB / "schema.sql"
 
 # metrics sütunu → fonksiyonun çıkış adı öneki
@@ -25,7 +23,7 @@ ADDON_MEASURES = {
     "gpu_vram_used_mb": "gpu_vram",
 }
 AGGREGATES = ["min", "max", "avg"]
-FILES = [MIGRATION, SCHEMA]
+FILES = [SCHEMA]
 
 
 def code(path: Path) -> str:
@@ -50,14 +48,8 @@ def test_every_addon_output_column_is_declared(path, prefix, aggregate):
     assert re.search(rf"^\s*{prefix}_{aggregate}\s+(real|int)\b", code(path), re.M)
 
 
-def test_migration_and_schema_declare_the_same_addon_columns():
-    def declared(path: Path) -> set[str]:
-        names = "|".join(re.escape(p) for p in ADDON_MEASURES.values())
-        return set(re.findall(rf"^\s*((?:{names})_(?:min|max|avg))\s", code(path), re.M))
+def test_schema_declares_all_addon_columns():
+    names = "|".join(re.escape(p) for p in ADDON_MEASURES.values())
+    declared = set(re.findall(rf"^\s*((?:{names})_(?:min|max|avg))\s", code(SCHEMA), re.M))
 
-    assert declared(MIGRATION) == declared(SCHEMA)
-    assert len(declared(MIGRATION)) == 21
-
-
-def test_migration_expects_the_new_column_count():
-    assert "out_columns            = 38" in MIGRATION.read_text(encoding="utf-8")
+    assert len(declared) == 21
