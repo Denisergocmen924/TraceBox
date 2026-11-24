@@ -1,8 +1,21 @@
 """agent/core/metrics.py — ölçüm toplayıcısının ilk çağrı davranışı ve wire sözleşmesi."""
 
+import subprocess
 from dataclasses import asdict
 
+import pytest
+
 from agent.core.metrics import MetricsCollector
+
+
+@pytest.fixture(autouse=True)
+def no_real_nvidia_smi(monkeypatch):
+    """Toplayıcı GPU'yu da okur; testler gerçek `nvidia-smi` çalıştırmasın."""
+
+    def empty_output(command, **kwargs):
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", empty_output)
 
 
 def test_reading_carries_the_ram_percentage_beside_the_sample():

@@ -55,8 +55,15 @@ class FakeRun:
 
 
 @pytest.fixture
-def collector():
-    """CPU yüzdesinin tabanı alınmış bir toplayıcı — ikinci ölçüm gerçek olur."""
+def collector(monkeypatch):
+    """CPU yüzdesinin tabanı alınmış bir toplayıcı — ikinci ölçüm gerçek olur.
+
+    Isınma çağrısı da GPU'yu sorgular; gerçek `nvidia-smi` çalışmasın diye
+    boş çıktı veren bir `subprocess.run` konur. Boş çıktı "program yok" sayılmaz
+    (`FileNotFoundError` olmadığı için okuyucu bunu hatırlamaz), böylece testler
+    makinede NVIDIA sürücüsü olup olmamasından bağımsız çalışır.
+    """
+    monkeypatch.setattr(subprocess, "run", FakeRun(stdout=""))
     instance = MetricsCollector()
     instance.collect()
     return instance
