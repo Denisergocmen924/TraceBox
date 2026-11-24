@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import psutil
 
 from agent.core.clock import seconds_since_iso, utc_now_iso
-from agent.core.config import ADDON_CRASH_PROCESSES, Config
+from agent.core.config import Config
 from agent.core.metrics import BYTES_PER_MB, MetricSample
 from agent.logsources.base import LogRecord
 
@@ -315,24 +315,20 @@ def _top_processes(reason: str, limit: int) -> list[dict]:
     return rows[:limit]
 
 
-def build_crash_snapshot(reason: str, config: Config) -> dict:
+def build_crash_snapshot(reason: str) -> dict:
     """POST /ingest gövdesindeki crash_snapshots satırını üretir (CLAUDE.md §4.2).
 
-    Satır HER flush'ta yazılır. crash_processes eklentisi kapalıysa processes
-    boş kalır ama trigger_reason ile measured_at yine kaydedilir; metrikler
-    "CPU %95'ti" der, bu satır "flush gerçekten attı" der.
+    Satır HER flush'ta yazılır: trigger_reason ve measured_at ile birlikte en
+    yoğun süreçler kaydedilir; metrikler "CPU %95'ti" der, bu satır "flush
+    gerçekten attı" ve "o an en çok kim çalışıyordu" der.
 
     Süreçler okunamazsa (psutil beklenmedik bir hata verirse) snapshot boş
     süreç listesiyle döner: eksik bir kayıt, hiç kayıt olmamasından iyidir.
     """
-    processes: list[dict] = []
-    # Süreç listesi yalnızca eklenti açıkken doldurulur; kapalıyken satır
-    # yine yazılır ama processes boş kalır.
-    if ADDON_CRASH_PROCESSES in config.enabled_addons:
-        try:
-            processes = _top_processes(reason, TOP_PROCESS_COUNT)
-        except psutil.Error:
-            processes = []
+    try:
+        processes = _top_processes(reason, TOP_PROCESS_COUNT)
+    except psutil.Error:
+        processes = []
 
     return {
         "uuid": str(uuid.uuid4()),

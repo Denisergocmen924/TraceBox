@@ -1,10 +1,9 @@
 """
-Seçilebilir eklentiler — enabled_addons filtresi, sensör seçimi ve GPU okuma.
+Ek ölçüler — sıcaklık, swap, load average ve GPU: sensör seçimi ve okuma.
 
-Eklentilerin ortak riski şudur: **kapalıyken sessizce açık olmak ya da açıkken
-sessizce yanlış şeyi ölçmek.** İkisi de hata üretmez; biri kullanıcının
-istemediği veriyi toplar, diğeri sütuna makineden makineye farklı anlam taşıyan
-bir sayı yazar.
+Ek ölçülerin ortak riski şudur: **makinede karşılığı yokken hata vermek ya da
+sessizce yanlış şeyi ölçmek.** Biri ölçüm döngüsünü düşürür, diğeri sütuna
+makineden makineye farklı anlam taşıyan bir sayı yazar.
 
 Gerçek donanım burada kullanılamaz (bu makinede sensör olabilir, CI'da olmaz;
 NVIDIA kartı olabilir, olmayabilir). Bu yüzden psutil ve nvidia-smi taklit
@@ -15,41 +14,17 @@ alan ne zaman dolduruluyor, hata nasıl yutuluyor.
 from __future__ import annotations
 
 import subprocess
-from dataclasses import asdict, replace
-from pathlib import Path
+from dataclasses import asdict
 from types import SimpleNamespace
 
 import psutil
 import pytest
 
-import agent
 from agent.core import metrics as metrics_module
-from agent.core.config import (
-    ADDON_GPU,
-    ADDON_SWAP,
-    ADDON_TEMPERATURE,
-    KNOWN_ADDONS,
-    Config,
-    ConfigLoader,
-)
+from agent.core.config import ConfigLoader
 from agent.core.gpu import GpuReader
 from agent.core.inventory import collect_inventory
 from agent.core.metrics import MetricsCollector
-
-BARE = Config(collector_url="https://collector.test", device_key="tbx_live_test")
-ALL_ADDONS = replace(BARE, enabled_addons=KNOWN_ADDONS)
-
-# MetricSample'daki eklenti alanları — kapalıyken hepsi null kalmalı.
-ADDON_FIELDS = (
-    "temperature_c",
-    "swap_used_mb",
-    "load_avg_1",
-    "load_avg_5",
-    "load_avg_15",
-    "gpu_usage_percent",
-    "gpu_vram_used_mb",
-)
-
 
 class Warnings(list):
     """`warn` yerine geçer; basılan uyarıları toplar."""
@@ -80,56 +55,42 @@ class FakeRun:
 
 
 @pytest.fixture
-def collector():
-    """CPU yüzdesinin tabanı alınmış bir toplayıcı — ikinci ölçüm gerçek olur."""
+def collector(monkeypatch):
+    """CPU yüzdesinin tabanı alınmış bir toplayıcı — ikinci ölçüm gerçek olur.
+
+    Isınma çağrısı da GPU'yu sorgular; gerçek `nvidia-smi` çalışmasın diye
+    boş çıktı veren bir `subprocess.run` konur. Boş çıktı "program yok" sayılmaz
+    (`FileNotFoundError` olmadığı için okuyucu bunu hatırlamaz), böylece testler
+    makinede NVIDIA sürücüsü olup olmamasından bağımsız çalışır.
+    """
+    monkeypatch.setattr(subprocess, "run", FakeRun(stdout=""))
     instance = MetricsCollector()
-    instance.collect(BARE)
+    instance.collect()
     return instance
 
 
-# --- enabled_addons filtresi ------------------------------------------------
+# --- toplama ---------------------------------------------------------------
 
 
-def test_disabled_addons_leave_every_column_null(collector):
-    """Varsayılan config'te eklenti alanlarının HEPSİ null olmalı.
-
-    Bu testin koruduğu şey bir gizlilik/rıza kuralıdır: kullanıcı istemediği
-    hiçbir ölçümü göndermemiş olmalı. Sızıntı sessizdir — sütun dolar, kimse
-    fark etmez.
-    """
-    sample = asdict(collector.collect(BARE).sample)
-
-    assert [field for field in ADDON_FIELDS if sample[field] is not None] == []
-
-
-def test_enabling_an_addon_fills_only_its_own_columns(collector, monkeypatch):
-    """Bir eklentiyi açmak diğerlerini açmaz.
-
-    Tek bir `if` yanlış yazılırsa ("herhangi biri açıksa hepsini oku") kullanıcı
-    swap isterken GPU'yu da göndermeye başlar.
-    """
+def test_extras_are_read_on_every_collect(collector, monkeypatch):
+    """Ek ölçüler config'e bakmadan her ölçümde okunur."""
     monkeypatch.setattr(psutil, "swap_memory", lambda: SimpleNamespace(used=512 * 1024 * 1024))
 
-    sample = asdict(collector.collect(replace(BARE, enabled_addons=(ADDON_SWAP,))).sample)
+    sample = asdict(collector.collect().sample)
 
     assert sample["swap_used_mb"] == 512
-    assert [field for field in ADDON_FIELDS if field != "swap_used_mb" and sample[field]] == []
 
 
-def test_addon_list_is_read_from_the_config_on_every_collect(collector, monkeypatch):
-    """Eklenti açmak servisi yeniden başlatmayı gerektirmez.
+def test_a_machine_without_sensors_or_gpu_leaves_the_columns_null(collector, monkeypatch):
+    """Sensör ve GPU olmayan makinede ölçüm düşmez; ilgili alanlar null kalır."""
+    monkeypatch.setattr(psutil, "sensors_temperatures", lambda: {}, raising=False)
+    monkeypatch.setattr(subprocess, "run", FakeRun(error=FileNotFoundError()))
 
-    Döngü config'i her tick okuyor; toplayıcı listeyi __init__'te
-    saklasaydı kullanıcının config.toml'da yaptığı değişiklik ancak yeniden
-    başlatmada geçerli olurdu.
-    """
-    monkeypatch.setattr(psutil, "swap_memory", lambda: SimpleNamespace(used=0))
+    sample = asdict(collector.collect().sample)
 
-    before = collector.collect(BARE).sample.swap_used_mb
-    after = collector.collect(replace(BARE, enabled_addons=(ADDON_SWAP,))).sample.swap_used_mb
-
-    assert before is None
-    assert after == 0
+    assert sample["temperature_c"] is None
+    assert sample["gpu_usage_percent"] is None
+    assert sample["gpu_vram_used_mb"] is None
 
 
 # --- sıcaklık: hangi sensör -------------------------------------------------
@@ -227,11 +188,10 @@ def test_swap_read_failure_falls_back_to_null(monkeypatch):
 
 def test_load_average_fills_all_three_or_none_of_them():
     """Üç alan tek çağrıdan gelir; biri dolup diğeri boş kalamaz."""
-    enabled = metrics_module._load_average(enabled=True)
-    disabled = metrics_module._load_average(enabled=False)
+    values = metrics_module._load_average()
 
-    assert all(value is not None for value in enabled.values())
-    assert all(value is None for value in disabled.values())
+    assert set(values) == {"load_avg_1", "load_avg_5", "load_avg_15"}
+    assert all(value is not None for value in values.values())
 
 
 def test_load_average_failure_nulls_all_three(monkeypatch):
@@ -242,7 +202,7 @@ def test_load_average_failure_nulls_all_three(monkeypatch):
 
     monkeypatch.setattr(psutil, "getloadavg", explode, raising=False)
 
-    assert metrics_module._load_average(enabled=True) == {
+    assert metrics_module._load_average() == {
         "load_avg_1": None,
         "load_avg_5": None,
         "load_avg_15": None,
@@ -334,67 +294,41 @@ def test_gpu_model_is_read_for_the_inventory(monkeypatch):
     assert "--query-gpu=name" in run.calls[0]
 
 
-def test_gpu_is_not_queried_while_the_addon_is_off(collector, monkeypatch):
-    """Eklenti kapalıyken nvidia-smi HİÇ çalıştırılmaz.
-
-    Kapalı bir eklentinin bedeli sıfır olmalı; süreç başlatıp sonucu atmak
-    "kapalı" demek değildir.
-    """
+def test_gpu_is_queried_on_every_collect(collector, monkeypatch):
     run = FakeRun(stdout="34, 2100\n")
     monkeypatch.setattr(subprocess, "run", run)
 
-    collector.collect(BARE)
+    sample = collector.collect().sample
 
-    assert run.calls == []
+    assert run.calls != []
+    assert (sample.gpu_usage_percent, sample.gpu_vram_used_mb) == (34.0, 2100.0)
 
 
-def test_gpu_model_enters_the_inventory_only_when_enabled(monkeypatch):
+def test_gpu_model_enters_the_inventory(monkeypatch):
     monkeypatch.setattr(subprocess, "run", FakeRun(stdout="NVIDIA Test Card\n"))
 
-    assert collect_inventory(BARE).gpu_model is None
-    assert collect_inventory(replace(BARE, enabled_addons=(ADDON_GPU,))).gpu_model == (
-        "NVIDIA Test Card"
-    )
+    assert collect_inventory().gpu_model == "NVIDIA Test Card"
 
 
-# --- config: tanınmayan eklenti adı -----------------------------------------
+def test_inventory_without_a_gpu_has_no_model(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", FakeRun(error=FileNotFoundError()))
+
+    assert collect_inventory().gpu_model is None
 
 
-def test_unknown_addon_name_warns_without_stopping_the_agent(tmp_path):
-    """"temprature" yazan kullanıcı ne agent'ı kaybeder ne de sessiz kalır.
+# --- config: eski enabled_addons satırı -------------------------------------
 
-    Hata yükseltmek, tek harflik yazım hatası yüzünden izlemeyi tamamen
-    durdururdu — izleme aracının yapabileceği en kötü şey.
+
+def test_a_leftover_enabled_addons_line_is_ignored_without_a_warning(tmp_path):
+    """Eski kurulumun config.toml'unda kalan `enabled_addons` satırı agent'ı durdurmaz.
+
+    Satır artık hiçbir şeyi etkilemez; ne hata ne uyarı üretmeli.
     """
     path = tmp_path / "config.toml"
     path.write_text(
         'collector_url = "https://collector.test"\n'
         'device_key = "tbx_live_test"\n'
-        'enabled_addons = ["temprature", "swap"]\n'
-    )
-    path.chmod(0o600)
-    warnings = Warnings()
-
-    config = ConfigLoader(path, warn=warnings).load()
-
-    assert config.enabled_addons == ("temprature", "swap")
-    assert len(warnings) == 1
-    assert "temprature" in warnings[0]
-    assert ADDON_TEMPERATURE in warnings[0], "uyarı doğru yazımı göstermiyor"
-
-
-def test_every_known_addon_name_passes_without_a_warning(tmp_path):
-    """Tanınan adların tamamı sessizce kabul edilmeli.
-
-    Uyarı listesi bir adı yakalarsa, ya sabit listede ya da doğrulamada
-    tutarsızlık var demektir.
-    """
-    path = tmp_path / "config.toml"
-    names = ", ".join(f'"{name}"' for name in KNOWN_ADDONS)
-    path.write_text(
-        'collector_url = "https://collector.test"\n'
-        'device_key = "tbx_live_test"\n'
-        f"enabled_addons = [{names}]\n"
+        'enabled_addons = ["swap"]\n'
     )
     path.chmod(0o600)
     warnings = Warnings()
@@ -402,15 +336,3 @@ def test_every_known_addon_name_passes_without_a_warning(tmp_path):
     ConfigLoader(path, warn=warnings).load()
 
     assert warnings == []
-
-
-def test_the_example_config_lists_every_known_addon():
-    """KNOWN_ADDONS ile config.example.toml aynı adları anmalı.
-
-    Koda eklenip örnek dosyada anılmayan bir eklenti, kullanıcının varlığını
-    hiç öğrenemeyeceği bir eklentidir; tersi (örnekte olup kodda olmayan) ise
-    kurulumda uyarı basar.
-    """
-    body = (Path(agent.__file__).parent / "config.example.toml").read_text(encoding="utf-8")
-
-    assert [name for name in KNOWN_ADDONS if f'"{name}"' not in body] == []

@@ -1,13 +1,10 @@
 """
 Ölçüm toplama — psutil ile CPU, RAM ve disk.
 
-Çekirdek metrikler HER ZAMAN toplanır: cpu_percent, ram_used_mb, disk_percent.
-Eklenti alanları (sıcaklık, swap, load average, GPU) yalnızca config'in
-enabled_addons listesinde adı geçiyorsa okunur; kapalıyken alan null kalır.
-
-Eklentilerin varsayılan olarak KAPALI olmasının sebebi ölçüm maliyeti değil,
-anlam maliyetidir: her makinede olmayan bir sütun (sıcaklık sensörü,
-NVIDIA GPU, Linux'a özgü load average) açıkça istenmeden doldurulmaz.
+Bütün alanlar HER ZAMAN okunur: cpu_percent, ram_used_mb, disk_percent ile
+sıcaklık, swap, load average ve GPU. Makinede karşılığı olmayan bir alan
+(sıcaklık sensörü, NVIDIA GPU, okunamayan load average) hata üretmez; o alan
+null kalır.
 """
 
 from __future__ import annotations
@@ -18,13 +15,6 @@ from dataclasses import dataclass
 import psutil
 
 from agent.core.clock import utc_now_iso
-from agent.core.config import (
-    ADDON_GPU,
-    ADDON_LOAD_AVG,
-    ADDON_SWAP,
-    ADDON_TEMPERATURE,
-    Config,
-)
 from agent.core.gpu import GpuReader
 
 # Bayt -> MB çevrimi ikili tabanda (MiB). Şema sütunları "mb" adını taşır ama
@@ -62,9 +52,9 @@ class MetricSample:
     ram_used_mb: int
     disk_percent: float
 
-    # --- eklentiler: kapalıyken None, yani sütun null kalır ---
+    # --- makineye bağlı alanlar: karşılığı yoksa None, yani sütun null kalır ---
     # Varsayılan değerleri var çünkü çekirdek alanların aksine bunların
-    # OLMAMASI normaldir; her çağrının hepsini vermesi gerekmez.
+    # OLMAMASI normaldir (sensör, GPU yok); her çağrının hepsini vermesi gerekmez.
     temperature_c: float | None = None
     swap_used_mb: int | None = None
     load_avg_1: float | None = None
@@ -105,16 +95,12 @@ class MetricsCollector:
         self._disk_mount_point = disk_mount_point
         # psutil.cpu_percent'in taban değeri alındı mı.
         self._cpu_primed = False
-        # GPU eklentisi kapalıyken hiç kullanılmaz; nesne durum tuttuğu için
-        # (nvidia-smi var mı) toplayıcıyla aynı ömrü paylaşır.
+        # Nesne durum tuttuğu için (nvidia-smi var mı) toplayıcıyla aynı ömrü
+        # paylaşır.
         self._gpu = GpuReader()
 
-    def collect(self, config: Config) -> MetricReading:
+    def collect(self) -> MetricReading:
         """Tek bir ölçüm alır.
-
-        config her çağrıda YENİDEN verilir: kullanıcı config.toml'da bir
-        eklentiyi açtığında değişiklik servis yeniden başlatılmadan geçerli
-        olsun diye (döngü her tick'te dosyayı yeniden okuyor).
 
         Fark gerektiren alan (cpu_percent) hesaplanamadığında None döner;
         çağıran bunu doğrudan null olarak kaydeder. 0.0 yazmak "yük yoktu"
@@ -126,10 +112,7 @@ class MetricsCollector:
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage(self._disk_mount_point)
 
-        addons = config.enabled_addons
-        gpu_usage_percent, gpu_vram_used_mb = (
-            self._gpu.read_usage() if ADDON_GPU in addons else (None, None)
-        )
+        gpu_usage_percent, gpu_vram_used_mb = self._gpu.read_usage()
 
         sample = MetricSample(
             uuid=str(uuid.uuid4()),
@@ -142,9 +125,9 @@ class MetricsCollector:
             # ölçü budur.
             ram_used_mb=(memory.total - memory.available) // BYTES_PER_MB,
             disk_percent=round(disk.percent, 1),
-            temperature_c=_cpu_temperature() if ADDON_TEMPERATURE in addons else None,
-            swap_used_mb=_swap_used_mb() if ADDON_SWAP in addons else None,
-            **_load_average(enabled=ADDON_LOAD_AVG in addons),
+            temperature_c=_cpu_temperature(),
+            swap_used_mb=_swap_used_mb(),
+            **_load_average(),
             gpu_usage_percent=gpu_usage_percent,
             gpu_vram_used_mb=gpu_vram_used_mb,
         )
@@ -208,7 +191,7 @@ def _swap_used_mb() -> int | None:
         return None
 
 
-def _load_average(*, enabled: bool) -> dict[str, float | None]:
+def _load_average() -> dict[str, float | None]:
     """1/5/15 dakikalık yük ortalaması — Linux'a özgü.
 
     Üç alan tek fonksiyondan çıkar çünkü tek bir çağrının üç parçasıdır;
@@ -218,9 +201,6 @@ def _load_average(*, enabled: bool) -> dict[str, float | None]:
     boyunca anlamsız değer verir; MVP Linux olduğu için sorun bugün yok,
     yine de hata hali sessizce null'a düşer.
     """
-    if not enabled:
-        return {"load_avg_1": None, "load_avg_5": None, "load_avg_15": None}
-
     try:
         one, five, fifteen = psutil.getloadavg()
     except (OSError, AttributeError):

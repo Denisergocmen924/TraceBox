@@ -1,12 +1,21 @@
 """agent/core/metrics.py — ölçüm toplayıcısının ilk çağrı davranışı ve wire sözleşmesi."""
 
+import subprocess
 from dataclasses import asdict
 
-from agent.core.config import Config
+import pytest
+
 from agent.core.metrics import MetricsCollector
 
-# Eklentisiz varsayılan: yalnızca çekirdek metrikler toplanır.
-CONFIG = Config(collector_url="https://collector.test", device_key="tbx_live_test")
+
+@pytest.fixture(autouse=True)
+def no_real_nvidia_smi(monkeypatch):
+    """Toplayıcı GPU'yu da okur; testler gerçek `nvidia-smi` çalıştırmasın."""
+
+    def empty_output(command, **kwargs):
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", empty_output)
 
 
 def test_reading_carries_the_ram_percentage_beside_the_sample():
@@ -16,7 +25,7 @@ def test_reading_carries_the_ram_percentage_beside_the_sample():
     tutar. İkisi aynı psutil okumasından çıkar; ayrılmasalardı eşik ya
     kaydedilenden farklı bir ana bakardı ya da wire sözleşmesi bozulurdu.
     """
-    reading = MetricsCollector().collect(CONFIG)
+    reading = MetricsCollector().collect()
 
     assert reading.ram_percent is not None
     assert 0.0 <= reading.ram_percent <= 100.0
@@ -33,7 +42,7 @@ def test_sample_fields_are_exactly_what_the_collector_accepts():
     """
     from collector.endpoints_ingest import MetricIn
 
-    sample_fields = set(asdict(MetricsCollector().collect(CONFIG).sample))
+    sample_fields = set(asdict(MetricsCollector().collect().sample))
 
     assert sample_fields <= set(MetricIn.model_fields), (
         "collector bu alanları tanımıyor: " f"{sorted(sample_fields - set(MetricIn.model_fields))}"

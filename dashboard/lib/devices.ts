@@ -44,12 +44,6 @@ export type DeviceRow = {
   last_boot: string | null;
   logging_enabled: boolean;
   last_seen: string | null;
-  /**
-   * Açık eklentiler. Zaman çizelgesinde hangi eklenti grafiklerinin
-   * çıkacağı buna bağlı.
-   * jsonb dizisi birkaç bayt; 10 saniyelik tur için yük sayılmaz.
-   */
-  enabled_addons: string[];
   metrics: LatestMetric[]; // gömülü sorgu her zaman dizi döner: 0 ya da 1 satır
 };
 
@@ -131,7 +125,7 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
  * Detay ekranı (§9.4) bunun üstüne envanterin kalanını ekler.
  */
 const LIST_COLUMNS = `id, device_name, os_name, os_version, arch, cpu_cores_logical,
-   ram_total_mb, disk_total_mb, agent_version, last_boot, logging_enabled, last_seen, enabled_addons,
+   ram_total_mb, disk_total_mb, agent_version, last_boot, logging_enabled, last_seen,
    metrics ( measured_at, cpu_percent, ram_used_mb, disk_percent )`;
 
 const DETAIL_COLUMNS = `${LIST_COLUMNS}, cpu_model, cpu_cores_physical,

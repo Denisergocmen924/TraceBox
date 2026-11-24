@@ -95,8 +95,8 @@ Every endpoint the collector exposes, and who it accepts:
 
 A field that cannot be computed (the first sample, a counter reset after a reboot) is written as **`null`**, not `0`: "I could not measure it" is never confused with "it was zero".
 
-**Optional add-ons** — switched on one by one in `config.toml`, `null` while off:
-`temperature` · `swap` · `load_avg` · `gpu` · `crash_processes`
+**Always collected, `null` when the machine has no equivalent:**
+`temperature` · `swap` · `load_avg` · `gpu` (usage and video memory). A machine without a temperature sensor or an NVIDIA GPU does not produce an error; those fields stay `null`, and the dashboard shows a chart for them only when the selected window holds at least one value.
 
 ### Logs
 
@@ -106,13 +106,13 @@ The agent keeps a **cursor**, so it picks up where it left off even after a rest
 
 ### Inventory (the machine's profile)
 
-`cpu_model`, core counts, `arch`, `ram_total_mb`, `disk_total_mb`, `os_name` / `os_version`, `kernel_version`, `last_boot`, `agent_version`.
+`cpu_model`, core counts, `arch`, `ram_total_mb`, `disk_total_mb`, `os_name` / `os_version`, `kernel_version`, `last_boot`, `agent_version`, `gpu_model` (`null` without an NVIDIA GPU).
 
 These rarely change, so they are not stored as a time series — they are read at startup, compared against the previous reading, and sent (overwriting the `devices` row) **only if something changed**.
 
 ### Crash snapshot
 
-The moment a threshold is crossed (emergency flush), if the `crash_processes` add-on is on, the 5 heaviest processes are recorded. That way the answer to "what choked the machine" does not disappear along with the machine.
+The moment a threshold is crossed (emergency flush), the 5 heaviest processes are recorded. That way the answer to "what choked the machine" does not disappear along with the machine.
 
 ### Timing — defaults
 

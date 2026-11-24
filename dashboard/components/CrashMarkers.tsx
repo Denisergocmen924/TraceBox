@@ -174,17 +174,12 @@ export function CrashMarkers({
 
           {selected.processes.length === 0 ? (
             /*
-              Boş liste bir HATA DEĞİL: `crash_processes` eklentisi kapalıyken
-              agent süreçleri hiç toplamıyor (§7). Kaydın kendisi yine gerçek —
-              o anda bir eşiğin aşıldığını söylüyor. Bunu yazmazsak kullanıcı
-              veri kaybettiğini sanar.
+              Boş liste bir HATA DEĞİL: agent süreç listesini o anda
+              okuyamamış olabilir. Kaydın kendisi yine gerçek — o anda bir
+              eşiğin aşıldığını söylüyor.
             */
             <p className="mt-3 text-sm text-muted">
-              No process list in this snapshot. Enable the{" "}
-              <code className="rounded bg-panel-2 px-1 py-0.5 font-mono text-xs">
-                crash_processes
-              </code>{" "}
-              add-on on this host to capture the top consumers.
+              No process list was captured in this snapshot.
             </p>
           ) : (
             <div className="mt-3 overflow-x-auto">

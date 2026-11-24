@@ -56,11 +56,10 @@ class InventoryIn(_Payload):
     last_boot: AwareDatetime | None = None
     agent_version: str | None = None
     gpu_model: str | None = None
-    enabled_addons: list[str] = Field(default_factory=list)
 
 
 class MetricIn(_Payload):
-    """Bir ölçüm örneği. Eklenti alanları kapalıysa null gelir."""
+    """Bir ölçüm örneği. Makinede karşılığı olmayan alanlar (sensör, GPU) null gelir."""
 
     uuid: UUID
     measured_at: AwareDatetime

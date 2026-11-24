@@ -89,7 +89,6 @@ DEVICE_WRITABLE_COLUMNS = frozenset(
         "last_boot",
         "agent_version",
         "gpu_model",
-        "enabled_addons",
         # sunucunun kendi bildiği: varış anı.
         "last_seen",
     }

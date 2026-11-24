@@ -26,7 +26,7 @@ import pytest
 
 from agent.core import flush, loop
 from agent.core.clock import utc_now_iso
-from agent.core.config import ADDON_CRASH_PROCESSES, Config
+from agent.core.config import Config
 from agent.core.metrics import MetricReading, MetricSample
 from agent.core.shipper import SendResult
 from agent.core.spool import RECORD_CRASH, Spool
@@ -310,31 +310,22 @@ def test_a_stamp_from_the_future_does_not_lock_the_flush_forever():
 # --- build_crash_snapshot: wire satırı -------------------------------------
 
 
-def test_snapshot_is_written_even_when_the_addon_is_off():
-    """crash_processes kapalıyken (varsayılan) satır yine yazılır, süreçler boş.
+def test_snapshot_carries_the_heaviest_processes(fake_processes):
+    """Satır HER flush'ta yazılır ve en çok kaynak yiyen süreçleri taşır.
 
-    Metrikler "CPU %95'ti" der; bu satır "flush GERÇEKTEN attı" der. İkisi
-    farklı sorulardır — satır atlanırsa acil gönderimin çalıştığına dair tek
-    kanıt kaybolur.
+    Metrikler "CPU %95'ti" der; bu satır "flush GERÇEKTEN attı" ve "o an en çok
+    kim çalışıyordu" der.
     """
-    snapshot = flush.build_crash_snapshot(flush.REASON_CPU, CONFIG)
-
-    assert snapshot["processes"] == []
-    assert snapshot["trigger_reason"] == flush.REASON_CPU
-    assert snapshot["measured_at"]
-    assert uuid.UUID(snapshot["uuid"])
-
-
-def test_snapshot_carries_processes_when_the_addon_is_on(fake_processes):
-    """Eklenti açıkken en çok kaynak yiyen süreçler listelenir."""
     fake_processes([FakeProcess(f"p{index}", cpu=float(index), ram_mb=index) for index in range(9)])
-    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
-    snapshot = flush.build_crash_snapshot(flush.REASON_CPU, config)
+    snapshot = flush.build_crash_snapshot(flush.REASON_CPU)
 
     assert len(snapshot["processes"]) == flush.TOP_PROCESS_COUNT
     assert [row["name"] for row in snapshot["processes"]] == ["p8", "p7", "p6", "p5", "p4"]
     assert snapshot["processes"][0] == {"name": "p8", "cpu": 8.0, "ram_mb": 8}
+    assert snapshot["trigger_reason"] == flush.REASON_CPU
+    assert snapshot["measured_at"]
+    assert uuid.UUID(snapshot["uuid"])
 
 
 def test_ram_triggered_snapshot_ranks_by_memory(fake_processes):
@@ -349,10 +340,9 @@ def test_ram_triggered_snapshot_ranks_by_memory(fake_processes):
             FakeProcess("ram-yiyen", cpu=0.1, ram_mb=8000),
         ]
     )
-    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
-    by_ram = flush.build_crash_snapshot(flush.REASON_RAM, config)
-    by_cpu = flush.build_crash_snapshot(flush.REASON_CPU, config)
+    by_ram = flush.build_crash_snapshot(flush.REASON_RAM)
+    by_cpu = flush.build_crash_snapshot(flush.REASON_CPU)
 
     assert [row["name"] for row in by_ram["processes"]] == ["ram-yiyen", "cpu-yiyen"]
     assert [row["name"] for row in by_cpu["processes"]] == ["cpu-yiyen", "ram-yiyen"]
@@ -370,9 +360,8 @@ def test_processes_that_vanish_mid_read_are_skipped(fake_processes):
             FakeProcess("sağlam", cpu=5.0, ram_mb=10),
         ]
     )
-    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
-    snapshot = flush.build_crash_snapshot(flush.REASON_CPU, config)
+    snapshot = flush.build_crash_snapshot(flush.REASON_CPU)
 
     assert [row["name"] for row in snapshot["processes"]] == ["sağlam"]
 
@@ -380,13 +369,11 @@ def test_processes_that_vanish_mid_read_are_skipped(fake_processes):
 def test_psutil_failure_leaves_the_snapshot_without_processes(monkeypatch):
     """psutil beklenmedik bir hata verirse snapshot yine üretilir.
 
-    Süreç listesi bir EKLENTİdir; onun hatası acil gönderimin kaydını
-    engellememeli.
+    Süreç listesinin okunamaması acil gönderimin kaydını engellememeli.
     """
     monkeypatch.setattr(flush, "_top_processes", _raise_psutil_error)
-    config = replace(CONFIG, enabled_addons=(ADDON_CRASH_PROCESSES,))
 
-    snapshot = flush.build_crash_snapshot(flush.REASON_RAM, config)
+    snapshot = flush.build_crash_snapshot(flush.REASON_RAM)
 
     assert snapshot["processes"] == []
     assert snapshot["trigger_reason"] == flush.REASON_RAM

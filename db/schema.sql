@@ -84,15 +84,12 @@ create table devices (
   os_version          text,
   kernel_version      text,
 
-  -- --- statik eklentiler (config'de enabled_addons içindeyse dolu) -------------
+  -- --- statik donanım (NVIDIA GPU yoksa null) ---------------------------------
   gpu_model           text,
 
   -- --- durum -----------------------------------------------------------------
   last_boot           timestamptz,
   agent_version       text,
-
-  -- Cihazda açık olan eklentiler, jsonb dizi olarak: ["swap","load_avg"].
-  enabled_addons      jsonb   not null default '[]',
 
   -- Pause durumunun sunucu kopyası; dashboard rozeti bu sütunu okur. Tek
   -- doğruluk kaynağı agent'ın state.json dosyasıdır (single writer).
@@ -143,7 +140,7 @@ create table metrics (
   ram_used_mb       integer,
   disk_percent      real,
 
-  -- --- eklentiler (config'de kapalıysa null kalır) ----------------------------
+  -- --- makineye bağlı alanlar (sensör/GPU yoksa null kalır) -----------------
   temperature_c     real,
   swap_used_mb      integer,
 
@@ -292,8 +289,9 @@ create index commands_device_status_idx on commands (device_id, status);
 -- Yeni indeks gerekmez: sorgu yukarıdaki (device_id, measured_at) indeksi
 -- üzerinden yürür.
 --
--- Eklenti sütunları (sıcaklık, swap, load_avg, GPU) da aynı üçlüyü döndürür. Eklenti
--- kapalıyken sütun null'dır ve min/max/avg null döner — "ölçülmedi", sıfır değil.
+-- Sıcaklık, swap, load_avg ve GPU sütunları da aynı üçlüyü döndürür. Makinede
+-- karşılığı yoksa (sensör, GPU) sütun null'dır ve min/max/avg null döner —
+-- "ölçülmedi", sıfır değil.
 create or replace function public.metrics_buckets(
   p_device_id uuid,
   p_from      timestamptz,

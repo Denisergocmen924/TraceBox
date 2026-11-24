@@ -25,7 +25,6 @@ function device(overrides: Partial<Device> & { seenAgo?: number | null } = {}): 
     last_boot: null,
     logging_enabled: true,
     last_seen: seenAgo == null ? null : new Date(NOW - seenAgo * 1000).toISOString(),
-    enabled_addons: [],
     latest: null,
     deletePending: false,
     ...rest,
