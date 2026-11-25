@@ -53,7 +53,6 @@ dev/
 # Barındırma Fly (collector'dan ayrı bir app) — Vercel değil, bkz. CLAUDE.md §9.1.
 node_modules/
 .next/
-out/
 next-env.d.ts
 *.tsbuildinfo
 
@@ -72,11 +71,6 @@ Thumbs.db
 # --- YEREL ÇALIŞMA DOSYALARI -------------------------------------------------
 # Makinede duran, repoya girmeyen yardımcı dosyalar.
 CLAUDE.md
-SIMPLIFY.md
-md/
-GrandSage.md
-GrandSage/
 
 # --- YEREL ÖRNEK DASHBOARD GÖRSELLERİ VE DEPLOY SCRİPTİ ----------------------------------------
-dashboard/example
 dashboard/deploy.sh
